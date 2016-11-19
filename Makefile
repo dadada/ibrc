@@ -1,23 +1,36 @@
-.PHONY: all clean doc client debug
-
 SHELL = /bin/sh
-CC = g++
-CXX_FLAGS = -Wall
-CXX_DEBUG_FLAGS = -g
-export
+CXX = g++
+INSTALL = install -c
+INSTALLDATA = instal -c -m 644
+LIBS = 
+CFLAGS = -g -O2 -Wall -I.
+CPPFLAGS = $(CFLAGS)
+LDFLAGS = -g
+prefix = $(HOME)
+bindir_relative = bin
+bindir = $(prefix)/bin
+SRCS_CPP = client.cpp
+SRCS = $(SRCS_CPP)
+OBJS = $(pathsubst %.c,%.o,$(SCRS))
+AUX = README.md LICENSE Makefile
+RM = rm -f
 
+.PHONY: all
+all: ibrc.pdf ibrcc
 
-all: client doc
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $^
 
+.PHONY: install
+install: all
+	$(INSTALL) ibrcc $(bindir)/$(binprefix)ibrc
+
+.PHONY: clean
 clean:
-	$(MAKE) -wC src/client clean
-	$(MAKE) -wC doc clean
+	$(RM) *.o *.aux *.log *.out ibrcc ibrc.pdf
 
-debug: CXXFLAGS += $(CXX_DEBUG_FLAGS)
+ibrc.pdf: doc/ibrc.tex
+	pdflatex $^
 
-doc:
-	$(MAKE) -wC doc all
-
-client:
-	$(MAKE) -wC src/client all
-
+ibrcc: client.o data.hpp
+	$(CXX) $(CXXFLAGS) -o $@ $^
