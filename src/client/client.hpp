@@ -1,3 +1,6 @@
+#ifndef CLIENT_HPP
+#define CLIENT_HPP
+
 #include <string>
 #include "../data.hpp"
 
@@ -57,3 +60,5 @@ class client
 		/* leaves the current channel, disconnects from the newtwork, stops the client */
 		int quit();
 };
+
+#endif /* CLIENT_HPP */

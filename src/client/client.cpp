@@ -22,8 +22,3 @@ int main(int argc, char* argv[])
 	address server_addr (host, port);
 	exit(EXIT_SUCCESS);
 }
-
-int client::run(address server_addr)
-{
-	return 0;
-}

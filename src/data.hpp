@@ -1,3 +1,6 @@
+#ifndef DATA_HPP
+#define DATA_HPP
+
 #include <string>
 
 #define DEFAULT_SERVER_PORT "5001"
@@ -26,3 +29,5 @@ class channel
 		const std::string get_name() const;
 		const address get_op();
 };
+
+#endif /* DATA_HPP */
