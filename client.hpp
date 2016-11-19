@@ -2,7 +2,7 @@
 #define CLIENT_HPP
 
 #include <string>
-#include "../data.hpp"
+#include "data.hpp"
 
 #define BUFLEN 1024
 

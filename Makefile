@@ -1,23 +1,49 @@
-.PHONY: all clean doc client debug
-
 SHELL = /bin/sh
-CC = g++
-CXX_FLAGS = -Wall
-CXX_DEBUG_FLAGS = -g
-export
+CXX = g++
+INSTALL = install
+RM = rm -f
+CFLAGS = -Wall \
+	 -D_FORTIFY_SOURCE=2 \
+	 -Wextra -Wcast-align -Wcast-qual -Wpointer-arith \
+	 -Waggregate-return -Wunreachable-code -Wfloat-equal \
+	 -Wformat=2 -Wredundant-decls -Wundef \
+	 -Wdisabled-optimization -Wshadow -Wmissing-braces \
+	 -Wstrict-aliasing=2 -Wstrict-overflow=5 -Wconversion \
+	 -Wno-unused-parameter \
+	 -pedantic -std=c++11
+CFLAGS_DEBUG = -g3 -O -DDEBUG
+CFLAGS_RELEASE = -O2 -march=native -mtune=native -ftree-vectorize
+prefix = $(HOME)
+bindir = $(prefix)/bin
+SRCS = client.cpp
+OBJS = $(patsubst %.cpp,%.o,$(SRCS))
+BIN = ibrcc
+DOC = ibrc.pdf
+AUX = README.md LICENSE Makefile
 
+all: debug
 
-all: client doc
+debug: CFLAGS += $(CFLAGS_DEBUG)
+debug: $(BIN)
+
+release: CFLAGS += $(CFLAGS_RELEASE)
+release: $(BIN) doc
+
+doc: ibrc.pdf
+
+install: release
+	$(INSTALL) ibrcc $(bindir)/$(binprefix)ibrcc
 
 clean:
-	$(MAKE) -wC src/client clean
-	$(MAKE) -wC doc clean
+	$(RM) $(OBJS) $(BIN) $(patsubst %.pdf,%.aux,$(DOC)) $(patsubst %.pdf,%.log,$(DOC)) $(patsubst %.pdf,%.out,$(DOC)) $(DOC)
 
-debug: CXXFLAGS += $(CXX_DEBUG_FLAGS)
+ibrc.pdf: doc/ibrc.tex
+	pdflatex $^
 
-doc:
-	$(MAKE) -wC doc all
+ibrcc: client.o
+	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) $(filter %.o,$^) $(LIBS)
 
-client:
-	$(MAKE) -wC src/client all
+%.o: %.cpp $(DEPS)
+	$(CXX) -c $< $(CFLAGS)
 
+.PHONY: all clean install debug release doc
