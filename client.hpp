@@ -2,6 +2,7 @@
 #define CLIENT_HPP
 
 #include <string>
+#include <exception>
 #include "data.hpp"
 
 #define BUFLEN 1024
@@ -12,10 +13,10 @@ class client
 {
 	private:
 		/* The client socket, connected to one server max.*/
-		const int socket;
+		int socket;
 
 		/* the client address, changes upon connect */
-		const address addr;
+		address addr;
 
 		/* globally unique nickname */
 		std::string nick;
@@ -23,12 +24,14 @@ class client
 		/* null if no channel was joined */
 		std::string current_channel;
 
-	public:
-		client(const int sockfd, const address client_addr)
-			: socket(sockfd), addr(client_addr) {}
+		/* displays the status of the last command to the user */
+		void status(int status_code);
 
-		/* runs the client */
-		int run(address server_addr);
+		/* encodes and sends a message */
+		int send_message(std::string msg_name, std::string msg_payload);
+
+	public:
+		client(address server);
 
 		/* connects to a server */
 		int connect(address server_addr);
@@ -59,6 +62,13 @@ class client
 
 		/* leaves the current channel, disconnects from the newtwork, stops the client */
 		int quit();
+
+};
+
+class client_exception: public std::exception
+{
+	public:
+		virtual const char* what() const throw();
 };
 
 #endif /* CLIENT_HPP */

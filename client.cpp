@@ -20,5 +20,21 @@ int main(int argc, char* argv[])
 		}
 	}
 	address server_addr (host, port);
+
+	try {
+		client c = client(server_addr);
+	} catch (client_exception& e) {
+		std::cerr << e.what() << std::endl;
+	}
 	exit(EXIT_SUCCESS);
+}
+
+client::client(address server) : addr(server)
+{
+	throw client_exception();
+}
+
+const char* client_exception::what() const throw()
+{
+	return "client: failed to create a client";
 }
