@@ -15,7 +15,7 @@ CFLAGS_DEBUG = -g3 -O -DDEBUG
 CFLAGS_RELEASE = -O2 -march=native -mtune=native -ftree-vectorize
 prefix = $(HOME)
 bindir = $(prefix)/bin
-SRCS = client.cpp
+SRCS = client.cpp data.cpp
 OBJS = $(patsubst %.cpp,%.o,$(SRCS))
 BIN = ibrcc
 DOC = ibrc.pdf
@@ -40,7 +40,7 @@ clean:
 ibrc.pdf: doc/ibrc.tex
 	pdflatex $^
 
-ibrcc: client.o
+ibrcc: client.o data.o
 	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) $(filter %.o,$^) $(LIBS)
 
 %.o: %.cpp $(DEPS)

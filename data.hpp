@@ -11,8 +11,7 @@ class address
 		const std::string host;
 		const std::string port;
 
-		address(std::string hostname, std::string portnum)
-			: host(hostname), port(portnum) {}
+		address(std::string hostname, std::string portnum);
 };
 
 class channel
@@ -21,9 +20,9 @@ class channel
 		const std::string name;
 		std::string topic;
 		const address op;
+
 	public:
-		channel(std::string channel_name, address channel_op)
-			: name(channel_name), topic(""), op(channel_op) {}
+		channel(std::string channel_name, address channel_op);
 		const std::string get_topic() const;
 		void set_topic(std::string topic);
 		const std::string get_name() const;
