@@ -12,11 +12,14 @@ int main(int argc, char* argv[]);
 class client
 {
 	private:
-		/* The client socket, connected to one server max.*/
-		int socket;
+		/* The client tcp socket, connected to one server max.*/
+		int sockfd;
 
-		/* the client address, changes upon connect */
-		address addr;
+		/* hostname */
+		std::string hostname;
+
+		/* port of the tcp socket in use, in host byte order */
+		int port;
 
 		/* globally unique nickname */
 		std::string nick;
@@ -25,16 +28,25 @@ class client
 		std::string current_channel;
 
 		/* displays the status of the last command to the user */
-		void status(int status_code);
+		void print_status(status_code code);
 
 		/* encodes and sends a message */
 		int send_message(std::string msg_name, std::string msg_payload);
 
+		/* receive status message from server */
+		int recv_status();
+
 	public:
 		client(address server);
 
+		/* leave and disconnect */
+		~client();
+
+		/* run the client */
+		int run();
+
 		/* connects to a server */
-		int connect(address server_addr);
+		int connect_client(address server_addr);
 
 		/* disconnects from the current server (socket)*/
 		int disconnect();
