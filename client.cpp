@@ -48,7 +48,7 @@ client::client(address server)
 client::~client()
 {
 	//leave_channel(current_channel);
-	//disconnect();
+	disconnect();
 }
 
 const char* client_exception::what() const throw()
@@ -251,5 +251,8 @@ int client::disconnect()
 	if (send_message("DISCONNECT", "") != 0) {
 		return -1;
 	}
+
+	close(sockfd);
+
 	return 0;
 }
