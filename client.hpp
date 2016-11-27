@@ -33,11 +33,11 @@ class client
 		/* encodes and sends a message */
 		int send_message(std::string msg_name, std::string msg_payload);
 
-		/* receive status message from server */
-		int recv_status();
+		/* receive a message */
+		std::string receive_message();
 
 	public:
-		client(address server);
+		client(std::string host, std::string port);
 
 		/* leave and disconnect */
 		~client();
@@ -46,7 +46,7 @@ class client
 		int run();
 
 		/* connects to a server */
-		int connect_client(address server_addr);
+		int connect_client(std::string host, std::string port);
 
 		/* disconnects from the current server (socket)*/
 		int disconnect();
@@ -75,6 +75,14 @@ class client
 		/* leaves the current channel, disconnects from the newtwork, stops the client */
 		int quit();
 
+		/* checks if client is connected */
+		bool connected();
+
+		/* processes the command encoded in msg */
+		bool process_command(std::string command);
+
+		/* processes a message received from the network */
+		void process_message(std::string msg);
 };
 
 class client_exception: public std::exception

@@ -3,6 +3,8 @@
 
 #include <string>
 #include <iostream>
+#include <exception>
+#include <unordered_map>
 
 #define DEFAULT_SERVER_PORT "5001"
 
@@ -54,5 +56,43 @@ enum status_code
 	privmsg_delivered = 604,
 };
 
+class receive_error : public std::exception
+{
+	public:
+		virtual const char* what() const throw();
+};
+
+enum ibrc_command
+{
+	CONNECT,
+	DISCONNECT,
+	NICK,
+	JOIN,
+	LEAVE,
+	GETTOPIC,
+	SETTOPIC,
+	MSG,
+	PRIVMSG,
+	QUIT,
+	HELP,
+};
+
+static std::unordered_map<ibrc_command, std::string> command_names = {
+		{CONNECT, "CONNECT"},
+		{DISCONNECT, "DISCONNECT"},
+		{NICK, "NICK"},
+		{JOIN, "JOIN"},
+		{LEAVE, "LEAVE"},
+		{GETTOPIC, "GETTOPIC"},
+		{SETTOPIC, "SETTOPIC"},
+		{MSG, "MSG"},
+		{PRIVMSG, "PRIVMSG"},
+		{QUIT, "QUIT"},
+		{HELP, "HELP"}
+};
+
+std::ostream &operator<<(std::ostream &out, const ibrc_command &cmd);
+
+std::istream &operator>>(std::istream &in, ibrc_command &cmd);
 
 #endif /* DATA_HPP */

@@ -40,7 +40,7 @@ clean:
 ibrc.pdf: doc/ibrc.tex
 	pdflatex $^
 
-ibrcc: client.o data.o
+ibrcc: client.o data.o helpers.o
 	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) $(filter %.o,$^) $(LIBS)
 
 %.o: %.cpp $(DEPS)

@@ -1,4 +1,5 @@
 #include "client.hpp"
+#include "helpers.hpp"
 #include <iostream>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <stdio.h>
 #include <sstream>
+#include <sys/epoll.h>
 
 #define USAGE "usage: ibrcc <hostname> <port>"
 
@@ -26,10 +28,12 @@ int main(int argc, char* argv[])
 			port = argv[2];
 		}
 	}
-	address server_addr (host, port);
 
 	try {
-		client c = client(server_addr);
+		client c = client(host, port);
+		if (c.run() != 0) {
+			std::cerr << "an unknown error occured" << std::endl;
+		}
 	} catch (client_exception& e) {
 		std::cerr << e.what() << std::endl;
 	}
@@ -37,18 +41,18 @@ int main(int argc, char* argv[])
 	exit(EXIT_SUCCESS);
 }
 
-client::client(address server)
+client::client(std::string host, std::string client_port)
 {
-	sockfd = 0;
-	if (connect_client(server) != 0) {
+	sockfd = 0; // stdin
+	current_channel = ""; // empty channel is no channel
+	if (connect_client(host, client_port) != 0) {
 		throw client_exception();
 	}
 }
 
 client::~client()
 {
-	//leave_channel(current_channel);
-	disconnect();
+	quit();
 }
 
 const char* client_exception::what() const throw()
@@ -56,7 +60,7 @@ const char* client_exception::what() const throw()
 	return "client: failed to create a client";
 }
 
-int client::connect_client(address server_addr)
+int client::connect_client(std::string host, std::string client_port)
 {
 	if (sockfd != 0) {
 		return -1;
@@ -70,7 +74,7 @@ int client::connect_client(address server_addr)
 	hints.ai_flags = 0;
 
 	int status;
-	if ((status = getaddrinfo(server_addr.host.c_str(), server_addr.port.c_str(), &hints, &ainfo)) != 0) {
+	if ((status = getaddrinfo(host.c_str(), client_port.c_str(), &hints, &ainfo)) != 0) {
 		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
 		return -1;
 	}
@@ -113,12 +117,8 @@ int client::connect_client(address server_addr)
 		struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
 		port = ntohs(s->sin6_port);
 	}
-
+	
 	if (send_message("CONNECT", "") != 0) {
-		return -1;
-	}
-
-	if (recv_status() != 0) {
 		return -1;
 	}
 
@@ -127,6 +127,10 @@ int client::connect_client(address server_addr)
 
 int client::send_message(std::string msg_name, std::string msg_payload)
 {
+	if (!connected()) {
+		return -1;
+	}
+
 	std::stringstream msg;
 
 	msg << msg_name << " " << hostname << " " << port << " " << msg_payload;
@@ -138,46 +142,29 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 		return -1;
 	}
 
-	int status;
-
-	while ((status = recv_status()) < 0) {
-		continue;
-	}
-
-	print_status(static_cast<status_code>(status));
-
 	return 0;
 }
 
-int client::recv_status()
+std::string client::receive_message()
 {
 	char buf[2056];
-	int status = 0;
 	ssize_t byte_count;
 
 	// one byte for string terminator
         byte_count= recv(sockfd, buf, 2055, 0);
 	if (byte_count == -1) {
 		perror("recv");
-		return -1;
+		throw receive_error();
 	} else if (byte_count == 0) {
 		disconnect();
-		return 0;
 	}
 
 	// terminate the string byte_count < 2056 ?
 	buf[byte_count] = '\0';
-	std::string token;
 	std::stringstream input;
 	input << buf;
-	std::string dummy;
-	std::string msg_name;
 
-	if ((input >> msg_name >> dummy >> status) && msg_name == "STATUS") {
-		return status;
-	} else {
-		return -1;
-	}
+	return input.str();
 }
 
 void client::print_status(status_code code)
@@ -248,11 +235,236 @@ void client::print_status(status_code code)
 
 int client::disconnect()
 {
-	if (send_message("DISCONNECT", "") != 0) {
+	if (sockfd != 0 && send_message("DISCONNECT", "") != 0) {
 		return -1;
 	}
 
 	close(sockfd);
 
 	return 0;
+}
+
+int client::set_nick(std::string new_nick)
+{
+	if (send_message("NICK", new_nick) != 0) {
+		return -1;
+	} else {
+		nick = new_nick;
+	}
+
+	return 0;
+}
+
+int client::join_channel(std::string chan_name)
+{
+	if (current_channel == chan_name) {
+		return -1;
+	}
+
+	int status = send_message("JOIN", chan_name);
+	if (status != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int client::leave_channel(std::string chan_name)
+{
+	if (current_channel != "" && send_message("LEAVE", chan_name) != 0) {
+		return -1;
+	} else {
+		current_channel = "";
+	}
+
+	return 0;
+}
+
+bool client::connected()
+{
+	return sockfd != 0;
+}
+
+int client::get_topic(std::string chan_name)
+{
+	if (send_message("GETTOPIC", chan_name) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int client::set_topic(std::string chan_name, std::string new_channel_topic)
+{
+	if (send_message("SETTOPIC", chan_name + new_channel_topic) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int client::send_channel_message(std::string channel_name, std::string message)
+{
+	if (send_message("MSG", channel_name + " " + message) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int client::send_private_message(std::string recipient, std::string channel, std::string message)
+{
+	if (send_message("PRIVMSG", recipient + " " + channel + " " + message) != 0) {
+		return -1;
+	}
+
+	return 0;
+}
+
+int client::quit()
+{
+	return leave_channel(current_channel) && disconnect() ? 0 : -1;
+}
+
+int client::run()
+{
+	#define MAX_EVENTS 10
+
+	struct epoll_event ev, events[MAX_EVENTS];
+
+	int epollfd = epoll_create1(0);
+	int user_fd = STDIN_FILENO;
+
+	if (epollfd == -1 || (set_socket_non_blocking(sockfd) != 0)
+	  || (set_socket_non_blocking(user_fd) != 0)) {
+		return -1;
+	}
+
+	if (epollfd == -1) {
+		perror("epoll_create1");
+		return -1;
+	}
+
+	ev.events = EPOLLIN;
+	ev.data.fd = user_fd;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, user_fd, &ev) == -1) {
+		perror("epoll_ctl: add user input fd failed.");
+		return -1;
+	}
+
+	ev.events = EPOLLIN;
+	ev.data.fd = sockfd;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) != 0) {
+		perror("epoll_ctr: add sockfd failed.");
+		return 1;
+	}
+
+	while (true) {
+		// no timeout
+		int next_fd = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+
+		if (next_fd == -1) {
+			perror("epoll_wait");
+			return -1;
+		}
+
+		for (int n = 0; n < next_fd; ++n) {
+			if (events[n].data.fd == user_fd) {
+				std::string command;
+				std::getline(std::cin, command);
+				process_command(command);
+			} else if (events[n].data.fd == sockfd) {
+				std::string msg = receive_message();
+				process_message(msg);
+			}
+		}
+	}
+
+	return 0;
+}
+
+bool client::process_command(std::string command)
+{
+	std::istringstream cmd_stream(command);
+
+	ibrc_command cmd;
+	if (cmd_stream >> cmd) {
+		std::string par1;
+		std::string par2;
+		switch (cmd) {
+			case CONNECT:
+				if (cmd_stream >> par1 >> par2) {
+					connect_client(par1, par2);
+				} else {
+					std::cerr << "usage: CONNECT <host> <port>" << std::endl;
+				}
+				break;
+			case DISCONNECT:
+				disconnect();
+				break;
+			case NICK:
+				if (cmd_stream >> par1) {
+					set_nick(par1);
+				} else {
+					std::cerr << "usage: NICK <new nick>" << std::endl;
+				}
+				break;
+			case JOIN:
+				if (cmd_stream >> par1) {
+					join_channel(par1);
+				} else {
+					std::cerr << "usage: JOIN <channel>" << std::endl;
+				}
+				break;
+			case LEAVE:
+				leave_channel(current_channel);
+				break;
+			case GETTOPIC:
+				get_topic(current_channel);
+				break;
+			case SETTOPIC:
+				if (cmd_stream >> par1) {
+					set_topic(current_channel, par1);
+				} else {
+					std::cerr << "usage: SETTOPIC <topic>" << std::endl;
+				}
+				break;
+			case MSG:
+				if (std::getline(cmd_stream, par1, '\n')) {
+					send_channel_message(current_channel, par1);
+				} else {
+					std::cerr << "usage: MSG <message>" << std::endl;
+				}
+				break;
+			case PRIVMSG:
+				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
+					send_private_message(par1, current_channel, par2);
+				} else {
+					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
+				}
+				break;
+			case QUIT:
+				return false;
+			case HELP:
+				std::cout << "commands: ";
+				for (auto &c : command_names) {
+					std::cout << c.second << ", ";
+				}
+				std::cout << HELP << std::endl;
+				break;
+			default:
+				break;
+		}
+	} else {
+		std::cerr << "not a valid command. see HELP for a list of commands" << std::endl;
+	}
+	return true;
+}
+
+
+void client::process_message(std::string msg)
+{
+	std::cout << msg << std::endl;
 }
