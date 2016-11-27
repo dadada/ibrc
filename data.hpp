@@ -56,6 +56,10 @@ enum status_code
 	privmsg_delivered = 604,
 };
 
+std::ostream &operator<<(std::ostream &out, const status_code &code);
+
+std::istream &operator>>(std::istream &in, status_code &status);
+
 class receive_error : public std::exception
 {
 	public:
@@ -75,6 +79,9 @@ enum msg_type
 	PRIVMSG,
 	QUIT,
 	HELP,
+	STATUS,
+	TOPIC,
+	NICKRES,
 };
 
 static std::unordered_map<msg_type, std::string> command_names = {
@@ -88,7 +95,10 @@ static std::unordered_map<msg_type, std::string> command_names = {
 		{MSG, "MSG"},
 		{PRIVMSG, "PRIVMSG"},
 		{QUIT, "QUIT"},
-		{HELP, "HELP"}
+		{HELP, "HELP"},
+		{STATUS, "STATUS"},
+		{TOPIC, "TOPIC"},
+		{NICKRES, "NICKRES"}
 };
 
 std::ostream &operator<<(std::ostream &out, const msg_type &cmd);

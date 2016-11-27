@@ -27,9 +27,6 @@ class client
 		/* null if no channel was joined */
 		std::string current_channel;
 
-		/* displays the status of the last command to the user */
-		void print_status(status_code code);
-
 		/* encodes and sends a message */
 		int send_message(std::string msg_name, std::string msg_payload);
 

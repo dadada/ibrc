@@ -167,72 +167,6 @@ std::string client::receive_message()
 	return input.str();
 }
 
-void client::print_status(status_code code)
-{
-	std::cout << "server: ";
-	switch (code) {
-		case connect_success:
-			std::cout << "connected successfully";
-			break;
-		case connect_error:
-			std::cout << "connection failed";
-			break;
-		case disconnect_success:
-			std::cout << "disconnected successfully";
-			break;
-		case disconnect_error:
-			std::cout << "failed to disconnect";
-			break;
-		case nick_unique:
-			std::cout << "nick unique, success";
-			break;
-		case nick_not_authorized:
-			std::cout << "not authorized to set nick";
-			break;
-		case nick_not_unique:
-			std::cout << "nick not unique, pick another nick";
-			break;
-		case join_known_success:
-			std::cout << "channel exists, joined channel";
-			break;
-		case join_new_success:
-			std::cout << "new channel created, joined channel, channel op";
-			break;
-		case not_in_channel:
-			std::cout << "must be joined to channel for this command";
-			break;
-		case no_such_channel:
-			std::cout << "no such channel";
-			break;
-		case already_in_channel:
-			std::cout << "client can only be joined to one channel at a time";
-			break;
-		case leave_successful:
-			std::cout << "left channel successfully";
-			break;
-		case client_not_channel_op:
-			std::cout << "must be channel op to perform this action";
-			break;
-		case msg_delivered:
-			std::cout << "message delivered successfully";
-			break;
-		case no_such_client:
-			std::cout << "client not found in network";
-			break;
-		case no_such_client_in_channel:
-			std::cout << "client is joined to different channel";
-			break;
-		case privmsg_delivered:
-			std::cout << "successfully delivered private message";
-			break;
-		default:
-			std::cout << "an unknown error occurred";
-			break;
-	}
-	std::cout << std::endl;
-}
-
-
 int client::disconnect()
 {
 	if (sockfd != 0 && send_message("DISCONNECT", "") != 0) {
@@ -466,5 +400,32 @@ bool client::process_command(std::string command)
 
 void client::process_message(std::string msg)
 {
-	std::cout << msg << std::endl;
+	std::istringstream msg_stream(msg);
+	msg_type cmd;
+	std::string dest_host;
+	int dest_port;
+	status_code status;
+	std::string topic;
+	if (msg_stream >> cmd >> dest_host >> dest_port 
+	  && dest_host == hostname && dest_port == port) {
+		switch (cmd) {
+			case STATUS:
+				if (msg_stream >> status) {
+					std::cout << "status: " << status << std::endl;
+				}
+				break;
+			case NICKRES:
+				if (msg_stream >> nick) {
+					std::cout << "nick: you are now known as " << nick << std::endl;
+				}
+				break;
+			case TOPIC:
+				if (msg_stream >> topic) {
+					std::cout << "topic: " << topic << std::endl;
+				}
+				break;
+			default:
+				break;
+		}
+	}
 }
