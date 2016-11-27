@@ -389,7 +389,7 @@ bool client::process_command(std::string command)
 {
 	std::istringstream cmd_stream(command);
 
-	ibrc_command cmd;
+	msg_type cmd;
 	if (cmd_stream >> cmd) {
 		std::string par1;
 		std::string par2;

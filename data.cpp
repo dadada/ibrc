@@ -33,13 +33,13 @@ const char* receive_error::what() const throw()
 	return "receive: failed to receive message";
 }
 
-std::ostream &operator<<(std::ostream &out, const ibrc_command &cmd) {
+std::ostream &operator<<(std::ostream &out, const msg_type &cmd) {
 	out << command_names[cmd];
 	return out;
 }
 
-std::istream &operator>>(std::istream &in, ibrc_command &cmd) {
-	static std::unordered_map<std::string, ibrc_command> names = {
+std::istream &operator>>(std::istream &in, msg_type &cmd) {
+	static std::unordered_map<std::string, msg_type> names = {
 			{"CONNECT", CONNECT},
 			{"DISCONNECT", DISCONNECT},
                         {"NICK", NICK},

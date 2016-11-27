@@ -62,7 +62,7 @@ class receive_error : public std::exception
 		virtual const char* what() const throw();
 };
 
-enum ibrc_command
+enum msg_type
 {
 	CONNECT,
 	DISCONNECT,
@@ -77,7 +77,7 @@ enum ibrc_command
 	HELP,
 };
 
-static std::unordered_map<ibrc_command, std::string> command_names = {
+static std::unordered_map<msg_type, std::string> command_names = {
 		{CONNECT, "CONNECT"},
 		{DISCONNECT, "DISCONNECT"},
 		{NICK, "NICK"},
@@ -91,8 +91,8 @@ static std::unordered_map<ibrc_command, std::string> command_names = {
 		{HELP, "HELP"}
 };
 
-std::ostream &operator<<(std::ostream &out, const ibrc_command &cmd);
+std::ostream &operator<<(std::ostream &out, const msg_type &cmd);
 
-std::istream &operator>>(std::istream &in, ibrc_command &cmd);
+std::istream &operator>>(std::istream &in, msg_type &cmd);
 
 #endif /* DATA_HPP */
