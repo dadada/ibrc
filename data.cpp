@@ -50,6 +50,7 @@ std::istream &operator>>(std::istream &in, msg_type &cmd) {
                         {"MSG", MSG},
                         {"PRIVMSG", PRIVMSG},
                         {"QUIT", QUIT},
+                        {"HELP", HELP},
                         {"STATUS", STATUS},
                         {"TOPIC", TOPIC},
                         {"NICKRES", NICKRES}
