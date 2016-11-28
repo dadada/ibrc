@@ -41,11 +41,11 @@ int main(int argc, char* argv[])
 	exit(EXIT_SUCCESS);
 }
 
-client::client(std::string host, std::string client_port)
+client::client(std::string host, std::string server_port)
 {
 	sockfd = 0; // stdin
 	current_channel = ""; // empty channel is no channel
-	if (connect_client(host, client_port) != 0) {
+	if (connect_client(host, server_port) != 0) {
 		throw client_exception();
 	}
 }
@@ -60,7 +60,7 @@ const char* client_exception::what() const throw()
 	return "client: failed to create a client";
 }
 
-int client::connect_client(std::string host, std::string client_port)
+int client::connect_client(std::string host, std::string server_port)
 {
 	if (sockfd != 0) {
 		return -1;
@@ -74,7 +74,7 @@ int client::connect_client(std::string host, std::string client_port)
 	hints.ai_flags = 0;
 
 	int status;
-	if ((status = getaddrinfo(host.c_str(), client_port.c_str(), &hints, &ainfo)) != 0) {
+	if ((status = getaddrinfo(host.c_str(), server_port.c_str(), &hints, &ainfo)) != 0) {
 		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
 		return -1;
 	}
@@ -105,7 +105,7 @@ int client::connect_client(std::string host, std::string client_port)
 	socklen_t len;
 	struct sockaddr_storage addr;
 
-	if (getpeername(sockfd, (struct sockaddr*)&addr, &len) != 0) {
+	if (getsockname(sockfd, (struct sockaddr*)&addr, &len) != 0) {
 		perror("getpeername");
 		return -1;
 	}
@@ -133,7 +133,7 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 
 	std::stringstream msg;
 
-	msg << msg_name << " " << hostname << " " << port << " " << msg_payload;
+	msg << msg_name << " " << hostname << " " << port << " " << msg_payload << std::endl;
 
 	const std::string& msg_str = msg.str();
 	const char* sendbuf = msg_str.c_str();
