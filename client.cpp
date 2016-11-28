@@ -384,7 +384,7 @@ bool client::process_command(std::string command)
 			case HELP:
 				std::cout << "commands: ";
 				for (auto &c : command_names) {
-					std::cout << c.second << ", ";
+					std::cout << c << ", ";
 				}
 				std::cout << HELP << std::endl;
 				break;

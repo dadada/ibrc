@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 #include <exception>
-#include <unordered_map>
+#include <vector>
 
 #define DEFAULT_SERVER_PORT "5001"
 
@@ -84,22 +84,22 @@ enum msg_type
 	NICKRES,
 };
 
-static std::unordered_map<msg_type, std::string> command_names = {
-		{CONNECT, "CONNECT"},
-		{DISCONNECT, "DISCONNECT"},
-		{NICK, "NICK"},
-		{JOIN, "JOIN"},
-		{LEAVE, "LEAVE"},
-		{GETTOPIC, "GETTOPIC"},
-		{SETTOPIC, "SETTOPIC"},
-		{MSG, "MSG"},
-		{PRIVMSG, "PRIVMSG"},
-		{QUIT, "QUIT"},
-		{HELP, "HELP"},
-		{STATUS, "STATUS"},
-		{TOPIC, "TOPIC"},
-		{NICKRES, "NICKRES"}
-};
+static std::vector<std::string> command_names = {
+		"CONNECT",
+		"DISCONNECT",
+		"NICK",
+		"JOIN",
+		"LEAVE",
+		"GETTOPIC",
+		"SETTOPIC",
+		"MSG",
+		"PRIVMSG",
+		"QUIT",
+		"HELP",
+		"STATUS",
+		"TOPIC",
+		"NICKRES"
+		};
 
 std::ostream &operator<<(std::ostream &out, const msg_type &cmd);
 
