@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
 
 client::client(std::string host, std::string server_port)
 {
-	sockfd = 0; // stdin
+	sockfd = STDIN_FILENO; // stdin
 	current_channel = ""; // empty channel is no channel
 	if (connect_client(host, server_port) != 0) {
 		throw client_exception();
