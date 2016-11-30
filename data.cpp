@@ -1,15 +1,26 @@
 #include "data.hpp"
 #include <unordered_map>
 
-address::address(std::string hostname, std::string portnum)
-	: host(hostname), port(portnum)
-{}
+std::unordered_map<std::string, address*> address::host_port_to_addr;
 
-channel::channel(std::string channel_name, address channel_op)
-	: name(channel_name), topic(""), op(channel_op) 
-{}
+std::unordered_map<std::string, channel*> channel::name_to_channel;
 
-const std::string channel::get_topic() const
+std::unordered_map<std::string, client_data*> client_data::nick_to_client;
+
+address::address(const std::string hostname, const std::string portnum,
+		const address *next, const client_data *peer_data)
+	: host(hostname), port(portnum), next_hop(next), peer(peer_data)
+{
+	host_port_to_addr.insert({hostname + " " + port, this});
+}
+
+channel::channel(const std::string channel_name, const address channel_op)
+	: name(channel_name), op(channel_op) 
+{
+	name_to_channel.insert({channel_name, this});
+}
+
+std::string channel::get_topic() const
 {
 	return topic;
 }
@@ -19,14 +30,24 @@ void channel::set_topic(std::string topic_text)
 	topic = topic_text;
 }
 
-const std::string channel::get_name() const
+std::string channel::get_name() const
 {
 	return name;
 }
 
-const address channel::get_op()
+address channel::get_op() const
 {
 	return op;
+}
+
+std::vector<address> channel::get_subscribers() const
+{
+	return subscribers;
+}
+
+void channel::subscribe(address addr)
+{
+	subscribers.push_back(addr);
 }
 
 const char* receive_error::what() const throw()
@@ -136,3 +157,28 @@ std::istream &operator>>(std::istream &in, status_code &status)
 	return in;
 }
 
+client_data::client_data(address a, std::string nick_name) 
+	: addr(a), nick(nick_name)
+{
+	nick_to_client.insert({nick_name, this});
+}
+
+address client_data::get_addr() const
+{
+	return addr;
+}
+
+std::string client_data::get_nick() const
+{
+	return nick;
+}
+
+void client_data::set_nick(std::string nick_name)
+{
+	for (char c : nick_name) {
+		if (!std::isalnum(c)) {
+			return;
+		}
+	}
+	nick = nick_name;
+}

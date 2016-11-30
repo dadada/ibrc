@@ -5,16 +5,27 @@
 #include <iostream>
 #include <exception>
 #include <vector>
+#include <unordered_map>
+#include <set>
 
 #define DEFAULT_SERVER_PORT "5001"
 
+class client_data;
+
 class address
 {
+	private:
+		/* host + " " + port */
+		static std::unordered_map<std::string, address*> host_port_to_addr;
 	public:
 		const std::string host;
 		const std::string port;
+		const address *next_hop;
+		const client_data *peer;
 
-		address(std::string hostname, std::string portnum);
+		address(const std::string hostname, const std::string portnum, const address *next, const client_data *peername);
+
+		static address* get(std::string);
 };
 
 std::ostream& operator <<(std::ostream& outs, const address &a);
@@ -22,17 +33,32 @@ std::ostream& operator <<(std::ostream& outs, const address &a);
 class channel
 {
 	private:
+
 		const std::string name;
 		std::string topic;
 		const address op;
+		std::vector<address> subscribers = {};
 
+		static std::unordered_map<std::string, channel*> name_to_channel;
 	public:
-		channel(std::string channel_name, address channel_op);
-		const std::string get_topic() const;
+		channel(const std::string channel_name, const address channel_op);
+
+		std::string get_topic() const;
+
 		void set_topic(std::string topic);
-		const std::string get_name() const;
-		const address get_op();
+
+		std::string get_name() const;
+
+		address get_op() const;
+
+		std::vector<address> get_subscribers() const;
+
+		void subscribe(address addr);
+
+		static channel* get(std::string);
 };
+
+
 
 enum status_code
 {
@@ -104,5 +130,24 @@ static std::vector<std::string> command_names = {
 std::ostream &operator<<(std::ostream &out, const msg_type &cmd);
 
 std::istream &operator>>(std::istream &in, msg_type &cmd);
+
+class client_data
+{
+	private:
+		address addr;
+		std::string nick;
+
+		static std::unordered_map<std::string, client_data*> nick_to_client;
+	public:
+		client_data(address a, std::string n);
+
+		address get_addr() const;
+
+		std::string get_nick() const;
+
+		void set_nick(std::string nick_name);
+
+		static client_data* get(std::string name);
+};
 
 #endif /* DATA_HPP */
