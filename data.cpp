@@ -8,8 +8,8 @@ std::unordered_map<std::string, channel*> channel::name_to_channel;
 std::unordered_map<std::string, client_data*> client_data::nick_to_client;
 
 address::address(const std::string hostname, const std::string portnum,
-		const address *next, const client_data *peer_data)
-	: host(hostname), port(portnum), next_hop(next), peer(peer_data)
+		int r, const client_data *peer_data)
+	: host(hostname), port(portnum), route(r), peer(peer_data)
 {
 	host_port_to_addr.insert({hostname + " " + port, this});
 }

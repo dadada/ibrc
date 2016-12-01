@@ -15,9 +15,9 @@ CFLAGS_DEBUG = -g3 -O -DDEBUG
 CFLAGS_RELEASE = -O2 -march=native -mtune=native -ftree-vectorize
 prefix = $(HOME)
 bindir = $(prefix)/bin
-SRCS = client.cpp data.cpp helpers.cpp
+SRCS = client.cpp data.cpp helpers.cpp server.cpp
 OBJS = $(patsubst %.cpp,%.o,$(SRCS))
-BIN = ibrcc
+BIN = ibrcc ibrcd
 DOC = ibrc.pdf
 AUX = README.md LICENSE Makefile
 
@@ -41,6 +41,9 @@ ibrc.pdf: doc/ibrc.tex
 	pdflatex $^
 
 ibrcc: client.o data.o helpers.o
+	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) $(filter %.o,$^) $(LIBS)
+
+ibrcd: server.o data.o helpers.o
 	$(CXX) $(CFLAGS) -o $@ $(LDFLAGS) $(filter %.o,$^) $(LIBS)
 
 %.o: %.cpp $(DEPS)

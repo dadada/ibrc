@@ -20,10 +20,11 @@ class address
 	public:
 		const std::string host;
 		const std::string port;
-		const address *next_hop;
+		const int route;
 		const client_data *peer;
 
-		address(const std::string hostname, const std::string portnum, const address *next, const client_data *peername);
+		address(const std::string hostname, const std::string portnum, 
+				int route_to_next_hop, const client_data *peername);
 
 		static address* get(std::string);
 };
