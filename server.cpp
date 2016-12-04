@@ -18,7 +18,6 @@ int main(int argc, char* argv[])
 	std::string peer_host;
 	std::string listen_port = DEFAULT_SERVER_PORT;
 
-	// TODO getopt
 	int opt = 0;
 	bool wants_connect = false;
 
@@ -89,7 +88,8 @@ bool server::connect_parent(std::string host, std::string port)
 	if (parent != 0) {
 		return false;
 	} else {
-		return conman->create_connection(host, port);
+		parent = conman->create_connection(host, port);
+		return parent != 0;
 	}
 }
 
@@ -121,6 +121,9 @@ bool server::run()
 						std::string msg;
 						while (conman->fetch_message(ev.data.fd, msg)) {
 							// reads all fully received messages
+							// TODO remove
+							std::cout << "receiving: " << msg;
+							//
 							process_message(msg, ev.data.fd);
 						}
 					} else {
@@ -139,9 +142,6 @@ bool server::run()
 
 void server::process_message(std::string msg, int source)
 {
-	// TODO remove following line
-	std::cout << msg;
-
 	std::istringstream smsg (msg);
 	msg_type type;
 	std::string host;

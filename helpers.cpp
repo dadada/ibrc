@@ -70,6 +70,9 @@ int sockfd_out(int sock, std::queue<std::string> &out_queue)
 {	
 	while (!out_queue.empty()) {
 		auto &msg = out_queue.front();
+		// TODO remove
+		std::cout << "sending: " << msg;
+		//
 		ssize_t bytes_written = send(sock, msg.c_str(), msg.size(), 0);
 		int err = errno;
 		
@@ -335,6 +338,12 @@ int connection_manager::create_connection(std::string host, std::string port)
 		return -1;
 	}
 
+	if (connect(sock, ainfo->ai_addr, ainfo->ai_addrlen) == -1) {
+		perror("connect");
+		remove_socket(sock);
+		return -1;
+	}
+
 	if (set_socket_non_blocking(sock) != 0) {
 		remove_socket(sock);
 		return -1;
@@ -347,12 +356,6 @@ int connection_manager::create_connection(std::string host, std::string port)
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sock, &ev) != 0) {
 		perror("epoll_ctl: add sockfd failed.");
-		remove_socket(sock);
-		return -1;
-	}
-
-	if (connect(sock, ainfo->ai_addr, ainfo->ai_addrlen) == -1) {
-		perror("connect");
 		remove_socket(sock);
 		return -1;
 	}
