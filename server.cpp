@@ -347,7 +347,7 @@ void server::do_gettopic(std::istringstream &smsg, int source)
 	std::string host, port, chan_name;
 	if (!(smsg >> host >> port >> chan_name)) {
 		return;
-	}
+	} // TODO
 	return;
 }
 
@@ -370,7 +370,20 @@ void server::do_nickres(std::istringstream &smsg, int source)
 {}
 
 void server::do_list(std::istringstream &smsg, int source)
-{}
+{
+	if (parent) {
+		conman->add_message(parent, smsg.str());
+	} else {
+		std::ostringstream out;
+		out << "LISTRES";
+		for (auto name : channel::get_channel_list()) {
+			out << " " << name;
+		}
+		out << std::endl;
+		conman->add_message(source, out.str());
+	}
+
+}
 
 const char* server_exception::what() const throw()
 {

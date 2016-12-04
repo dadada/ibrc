@@ -82,6 +82,8 @@ std::istream &operator>>(std::istream &in, msg_type &cmd) {
                         {"NICK", NICK},
                         {"JOIN", JOIN},
                         {"LEAVE", LEAVE},
+                        {"LIST", LIST},
+                        {"LISTRES", LISTRES},
                         {"GETTOPIC", GETTOPIC},
                         {"SETTOPIC", SETTOPIC},
                         {"MSG", MSG},
@@ -254,4 +256,15 @@ channel* channel::get(std::string name)
 void channel::unsubscribe(int sockfd)
 {
 	subscribers.erase(sockfd);
+}
+
+std::vector<std::string> channel::get_channel_list()
+{
+	std::vector<std::string> chan_names;
+
+	for (auto c : name_to_channel) {
+		chan_names.push_back(c.first);
+	}
+
+	return chan_names;
 }

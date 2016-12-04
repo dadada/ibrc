@@ -67,6 +67,8 @@ class channel
 		void unsubscribe(int sockfd);
 
 		static channel* get(std::string);
+
+		static std::vector<std::string> get_channel_list();
 };
 
 
@@ -112,6 +114,7 @@ enum msg_type
 	JOIN,
 	LEAVE,
 	LIST,
+	LISTRES,
 	GETTOPIC,
 	SETTOPIC,
 	MSG,
@@ -130,6 +133,7 @@ static std::vector<std::string> command_names = {
 		"JOIN",
 		"LEAVE",
 		"LIST",
+		"LISTRES",
 		"GETTOPIC",
 		"SETTOPIC",
 		"MSG",

@@ -437,6 +437,13 @@ void client::process_message(std::string& msg)
 					std::cout << "nick: you are now known as " << nick << std::endl;
 				}
 				break;
+			case LISTRES:
+				std::cout << "listres: ";
+				while (msg_stream >> nick) {
+					std::cout << nick << ", ";
+				}
+				std::cout << std::endl;
+				break;
 			case TOPIC:
 				if (msg_stream >> topic) {
 					std::cout << "topic: " << topic << std::endl;
