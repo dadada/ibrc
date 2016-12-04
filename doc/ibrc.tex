@@ -121,9 +121,8 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
   \item Der Client sendet SETTOPIC = (source: ADDR, channel: CHANNEL.name, topic: CHANNEL.topic) an seinen Server.
   \item
     \begin{enumerate}
-      \item Kennt der Server den Kanal nicht, sendet er STATUS = (dest = source, status = 403) an den Client.
       \item Ist CHANNEL.op nicht gleich source, dann sendet der Server STATUS = (dest = source, status = 502) an den Client.
-      \item Ansonsten übernimmt der Server topic in seine CHANNELLIST und sendet SETTOPIC weiter an den Kanal (siehe Routing).
+      \item Ansonsten übernimmt der Server topic in seine CHANNELLIST und sendet SETTOPIC weiter an den Kanal (siehe Routing)
     \end{enumerate}
 \end{enumerate}
 
@@ -180,7 +179,7 @@ Jeder Server wird über eine ADDR identifiziert.
 
 \subsection{CHANNEL}
 
-CHANNEL = (name: STRING, topic: STRING, op: ADDR)\\
+CHANNEL = (name: STRING, topic: STRING, op: NICK)\\
 name wird nach dem ersten JOIN nicht mehr geändert (siehe JOIN). topic wird durch SETTOPIC geändert. TOPIC und CHANNEL aktualisieren die Daten im Netz, wenn Änderungen auftreten.
 
 \subsection{CLIENTLIST}
@@ -247,6 +246,7 @@ Siehe Protokoll.
   300 & NICK ist einzigartig \\
   301 & Nicht authotisierte NICK-Änderung \\
   302 & NICK ist nicht einzigartig \\
+  303 & NICK ist nicht gesetzt worden \\
   400 & Bekannter Channel, JOIN erfolgreich \\
   401 & Neuer Channel erstellt, JOIN erfolgreich \\
   402 & Nicht in Channel \\
