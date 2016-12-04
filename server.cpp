@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "helpers.hpp"
 #include <iostream>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -46,7 +47,7 @@ int main(int argc, char* argv[])
 
 		if (wants_connect) {
 			if (peer_host != "") {
-				if (s.connect_server(peer_host, peer_port) != 0) {
+				if (!s.connect_parent(peer_host, peer_port)) {
 					std::cerr << "failed to connect" << std::endl;
 					exit(EXIT_FAILURE);
 				}
@@ -55,7 +56,7 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		if (s.run() != 0) { // run the server
+		if (!s.run()) { // run the server
 			exit(EXIT_FAILURE);
 		}
 
@@ -69,138 +70,210 @@ int main(int argc, char* argv[])
 
 server::server(std::string port)
 {
-	sockfd = STDIN_FILENO;
-	default_route = STDOUT_FILENO;
-	if (bind_server(port) != 0) {
+	conman = new connection_manager();
+	accepting = conman->add_accepting(port);
+	if (accepting == -1) {
+		delete conman;
 		throw server_exception();
 	}
+	parent = 0;
 }
 
 server::~server()
 {
-	if (default_route != STDOUT_FILENO) {
-		close(default_route);
-		default_route = STDOUT_FILENO;
-	}
-
-	if (sockfd != STDIN_FILENO) {
-		close(default_route);
-		sockfd = STDIN_FILENO;
-	}
+	delete conman;
 }
 
-int server::bind_server(std::string port)
+bool server::connect_parent(std::string host, std::string port)
 {
-	if (sockfd != 0) {
-		return -1;
+	if (parent != 0) {
+		return false;
+	} else {
+		return conman->create_connection(host, port);
 	}
-
-	struct addrinfo *ainfo;
-	struct addrinfo hints;
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET6; // AF_INET or AF_INET6 to force version
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
-
-	int status = 0;
-	if ((status = getaddrinfo(NULL, port.c_str(), &hints, &ainfo)) != 0) {
-		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
-		return -1;
-	}
-
-	sockfd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
-
-	if (sockfd == -1) {
-		perror("socket");
-		return -1;
-	}
-
-	int yes = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
-		perror("setsockopt");
-		reset_socket(sockfd, STDIN_FILENO);
-		return -1;
-	}
-
-	if (bind(sockfd, ainfo->ai_addr, ainfo->ai_addrlen) != 0) {
-		perror("bind");
-		reset_socket(sockfd, STDIN_FILENO);
-		return -1;
-	}
-
-	if (listen(sockfd, 5) != 0) {
-		perror("listen");
-		reset_socket(sockfd, STDIN_FILENO);
-		return -1;
-	}
-
-	return 0;
 }
 
-int server::connect_server(std::string host, std::string port)
-{
-	if (default_route != STDOUT_FILENO) {
-		return -1;
-	}
-
-	struct addrinfo *ainfo;
-	struct addrinfo hints;
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = 0;
-
-	int status;
-	if ((status = getaddrinfo(host.c_str(), port.c_str(), &hints, &ainfo)) != 0) {
-		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
-		return -1;
-	}
-
-	default_route = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
-
-	if (default_route == -1) {
-		perror("socket");
-		reset_socket(default_route, STDOUT_FILENO);
-		return -1;
-	}
-
-	int yes = 1;
-	if (setsockopt(default_route, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
-		perror("setsockopt");
-		reset_socket(default_route, STDOUT_FILENO);
-		return -1;
-	}
-	
-	if (connect(default_route, ainfo->ai_addr, ainfo->ai_addrlen) == -1) {
-		perror("connect");
-		reset_socket(default_route, STDOUT_FILENO);
-		return -1;
-	}
-
-	return 0;
-}
-
-void server::reset_socket(int sock, int def)
-{
-	close(sock);
-	sock = def;
-}
-
-int server::run()
+bool server::run()
 {
 	while (true) {
-		char buf[2056];
-		ssize_t bytes_read = recv(default_route, &buf, 2055, 0);
-		if (bytes_read < 0) {
-			perror("recv");
+		// polling here
+		int count_events = conman->wait_events();
+
+		if (count_events == -1) {
+			perror("epoll_wait");
+			return false;
 		}
-		buf[bytes_read] = '\0';
-		std::cout << buf;
+
+		struct epoll_event ev;
+		while (conman->next_event(ev)) {
+			if (ev.events & EPOLLERR || ev.events & EPOLLHUP) {
+				std::cerr << "epoll failed, quitting" << std::endl;
+				return false;
+			} else if (ev.data.fd == accepting) { // adds a new client or server
+				int sock = conman->accept_client(ev.data.fd);
+				if (sock == -1) {
+					std::cerr << "failed to accept incoming connection"
+					       	<< std::endl;
+				}
+			} else { // some other fd is ready
+				if (ev.events & EPOLLIN) {
+					if (conman->receive_messages(ev.data.fd)) {
+						std::string msg;
+						while (conman->fetch_message(ev.data.fd, msg)) {
+							// reads all fully received messages
+							process_message(msg, ev.data.fd);
+						}
+					} else {
+						std::cerr << "failed to receive messages" << std::endl;
+						return false;
+					}
+				} else if (ev.events & EPOLLOUT) {
+					if (!conman->send_messages(ev.data.fd)) {
+						std::cerr << "failed to send messages from queue" << std::endl;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+void server::process_message(std::string msg, int source)
+{
+	// TODO remove following line
+	std::cout << msg << std::endl;
+	std::istringstream smsg (msg);
+	msg_type type;
+	std::string host;
+	std::string port;
+
+	if (smsg >> type) {
+		switch (type) {
+			case CONNECT:
+				do_connect(smsg, source);
+				break;
+			case DISCONNECT:
+				do_disconnect(smsg, source);
+				break;
+			case NICK:
+				do_nick(smsg, source);
+				break;
+			case JOIN:
+				do_join(smsg, source);
+				break;
+			case LEAVE:
+				do_leave(smsg, source);
+				break;
+			case GETTOPIC:
+				do_gettopic(smsg, source);
+				break;
+			case SETTOPIC:
+				do_settopic(smsg, source);
+				break;
+			case MSG:
+				do_msg(smsg, source);
+				break;
+			case PRIVMSG:
+				do_privmsg(smsg, source);
+				break;
+			case STATUS:
+				do_status(smsg, source);
+				break;
+			case TOPIC:
+				do_topic(smsg, source);
+				break;
+			case NICKRES:
+				do_nickres(smsg, source);
+				break;
+			default:
+				// do_nothing
+				break;
+		}
 	}
 }
+
+void server::send_status(const address *addr, status_code code)
+{
+	std::ostringstream reply;
+	reply << "STATUS " << addr->host 
+		<< " " << addr->port
+		<< " " << code << std::endl;
+	conman->add_message(addr->route, reply.str());
+}
+
+void server::do_connect(std::istringstream &smsg, int source)
+{
+	std::ostringstream reply;
+	status_code status;
+
+	std::string host, port;
+	if (smsg >> host >> port) {
+		new address(host, port, source);
+		if (parent) {
+			conman->add_message(parent, smsg.str());
+			return;
+		} else {
+			status = connect_success;
+			reply << STATUS << " " << host << " " << port << " " << static_cast<int>(status);
+			// TODO
+			std::cout << reply.str();
+			conman->add_message(source, reply.str());
+		}
+	} else {
+		status = connect_error;
+	}
+
+}
+
+void server::do_disconnect(std::istringstream &smsg, int source)
+{
+	std::string host, port;
+	if (smsg >> host >> port) {
+		address *scr = address::get(host + " " + port);
+		delete scr;
+		if (parent) {
+			conman->add_message(parent, smsg.str());
+		}
+	}
+}
+
+void server::do_nick(std::istringstream &smsg, int source)
+{
+	std::string host, port;
+	if (smsg >> host >> port) {
+
+	}
+}
+
+void server::do_join(std::istringstream &smsg, int source)
+{
+}
+
+void server::do_leave(std::istringstream &smsg, int source)
+{}
+
+void server::do_gettopic(std::istringstream &smsg, int source)
+{}
+
+void server::do_settopic(std::istringstream &smsg, int source)
+{}
+
+void server::do_msg(std::istringstream &smsge, int source)
+{}
+
+void server::do_privmsg(std::istringstream &smsg, int source)
+{}
+
+void server::do_status(std::istringstream &smsg, int source)
+{}
+
+void server::do_topic(std::istringstream &smsg, int source)
+{}
+
+void server::do_nickres(std::istringstream &smsg, int source)
+{}
 
 const char* server_exception::what() const throw()
 {
 	return "server: failed to create a server";
 }
-

@@ -7,14 +7,38 @@ std::unordered_map<std::string, channel*> channel::name_to_channel;
 
 std::unordered_map<std::string, client_data*> client_data::nick_to_client;
 
-address::address(const std::string hostname, const std::string portnum,
-		int r, const client_data *peer_data)
-	: host(hostname), port(portnum), route(r), peer(peer_data)
+address::address(const std::string hostname, const std::string portnum, int r)
+	: host(hostname), port(portnum), route(r)
 {
 	host_port_to_addr.insert({hostname + " " + port, this});
+	peer = new client_data(this, "");
 }
 
-channel::channel(const std::string channel_name, const address channel_op)
+address::~address()
+{
+	auto found = host_port_to_addr.find(host + " " + port);
+	if (found != host_port_to_addr.end()) {
+		host_port_to_addr.erase(found);
+	}
+	delete peer;
+}
+
+client_data* address::get_peer() const
+{
+	return peer;
+}
+
+address* address::get(std::string name)
+{
+	auto found = host_port_to_addr.find(name);
+	if (found != host_port_to_addr.end()) {
+		return (*found).second;
+	} else {
+		return nullptr;
+	}
+}
+
+channel::channel(const std::string channel_name, const address *channel_op)
 	: name(channel_name), op(channel_op) 
 {
 	name_to_channel.insert({channel_name, this});
@@ -30,24 +54,14 @@ void channel::set_topic(std::string topic_text)
 	topic = topic_text;
 }
 
-std::string channel::get_name() const
-{
-	return name;
-}
-
-address channel::get_op() const
-{
-	return op;
-}
-
-std::vector<address> channel::get_subscribers() const
+std::set<int> channel::get_subscribers() const
 {
 	return subscribers;
 }
 
-void channel::subscribe(address addr)
+void channel::subscribe(int peersock)
 {
-	subscribers.push_back(addr);
+	subscribers.insert(peersock);
 }
 
 const char* receive_error::what() const throw()
@@ -157,15 +171,10 @@ std::istream &operator>>(std::istream &in, status_code &status)
 	return in;
 }
 
-client_data::client_data(address a, std::string nick_name) 
-	: addr(a), nick(nick_name)
+client_data::client_data(address *a, std::string nick_name) 
+	: nick(nick_name), addr(a)
 {
 	nick_to_client.insert({nick_name, this});
-}
-
-address client_data::get_addr() const
-{
-	return addr;
 }
 
 std::string client_data::get_nick() const
@@ -181,4 +190,28 @@ void client_data::set_nick(std::string nick_name)
 		}
 	}
 	nick = nick_name;
+}
+
+client_data* get_client_data(std::string host, std::string port) {
+	address *source = address::get(host + " " + port);
+	if (source != nullptr) {
+		return source->get_peer();
+	}
+	return nullptr;
+}
+
+channel::~channel()
+{
+	auto found = name_to_channel.find(name);
+	if (found != name_to_channel.end()) {
+		name_to_channel.erase(found);
+	}
+}
+
+client_data::~client_data()
+{
+	auto found = nick_to_client.find(nick);
+	if (found != nick_to_client.end()) {
+		nick_to_client.erase(found);
+	}
 }

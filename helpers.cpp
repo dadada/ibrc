@@ -5,6 +5,10 @@
 #include <sys/socket.h>
 #include <sstream>
 #include <errno.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include <cstring>
 
 #define BUFLEN 2056 // max size of message
 
@@ -78,4 +82,282 @@ int sockfd_out(int sock, std::queue<std::string> &out_queue)
 		}
 	}
 	return 0;
+}
+
+connection_manager::connection_manager()
+{
+	epollfd = epoll_create1(0);
+
+	events = new struct epoll_event[MAX_EVENTS];
+
+	if (epollfd == -1) {
+		perror("epoll_create1");
+	}
+}
+
+connection_manager::~connection_manager()
+{
+	delete[] events;
+	for (auto s : socks) {
+		if (close(s) == -1) {
+			perror("close");
+		}
+	}
+}
+
+int connection_manager::wait_events()
+{
+	next_event_pos = 0;
+
+	int count = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+
+	if (count == -1) {
+		perror("epoll_wait");
+		return -1;
+	}
+
+	return count;
+}
+
+bool connection_manager::next_event(struct epoll_event &ev)
+{
+	if (next_event_pos < MAX_EVENTS) {
+		ev = events[next_event_pos];
+		if (ev.events & EPOLLERR || ev.events & EPOLLHUP) {
+			remove_socket(ev.data.fd);
+		}
+		next_event_pos++;
+		return true;
+	}
+	return false;
+}
+
+int connection_manager::add_accepting(std::string port)
+{
+	struct addrinfo *ainfo;
+	struct addrinfo hints;
+	std::memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET6; // AF_INET or AF_INET6 to force version
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+
+	int status = 0;
+	if ((status = getaddrinfo(NULL, port.c_str(), &hints, &ainfo)) != 0) {
+		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
+		return -1;
+	}
+
+	int listen_s = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
+
+	if (listen_s == -1) {
+		perror("socket");
+		return -1;
+	}
+
+	int yes = 1;
+	if (setsockopt(listen_s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+		perror("setsockopt");
+		remove_socket(listen_s);
+		return -1;
+	}
+
+	if (bind(listen_s, ainfo->ai_addr, ainfo->ai_addrlen) != 0) {
+		perror("bind");
+		remove_socket(listen_s);
+		return -1;
+	}
+
+	if (listen(listen_s, 5) != 0) {
+		perror("listen");
+		remove_socket(listen_s);
+		return -1;
+	}
+
+	if (set_socket_non_blocking(listen_s) != 0) {
+		remove_socket(listen_s);
+		return -1;
+	}
+
+	struct epoll_event ev;
+
+	ev.events = EPOLLIN | EPOLLET;
+	ev.data.fd = listen_s;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_s, &ev) != 0) {
+		remove_socket(listen_s);
+		perror("epoll_ctl: mod sockfd failed.");
+		return -1;
+	}
+
+	socks.insert(listen_s);
+
+	return listen_s;
+
+}
+
+int connection_manager::accept_client(int sock)
+{
+
+	struct sockaddr_storage addr;
+	socklen_t addrlen = sizeof addr;
+
+	int conn_s = accept(sock, (struct sockaddr *) &addr, &addrlen);
+	if (conn_s == -1) {
+		perror("accept");
+		return -1;
+	}
+
+	if (set_socket_non_blocking(conn_s) == -1) {
+		remove_socket(conn_s);
+		return -1;
+	}
+
+	struct epoll_event ev;
+
+	ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+	ev.data.fd = conn_s;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_s, &ev) == -1) {
+		perror("epoll_ctl: failed to add socket");
+		remove_socket(conn_s);
+		return -1;
+	}
+
+	socks.insert(conn_s);
+
+	return conn_s;
+}
+
+bool connection_manager::remove_socket(int sock)
+{
+//	in_queues.erase(sock);
+	out_queues.erase(sock);
+	socks.erase(sock);
+	if (close(sock) == -1) {
+		perror("close");
+		return false;
+	}
+	return true;
+}
+
+bool connection_manager::pause_write(int sock)
+{
+	return epoll_mod(sock, EPOLLIN | EPOLLET);
+}
+
+bool connection_manager::continue_write(int sock)
+{
+	return epoll_mod(sock, EPOLLOUT | EPOLLIN | EPOLLET);
+}
+
+bool connection_manager::epoll_mod(int sock, uint32_t event_flags)
+{
+	struct epoll_event ev;
+	ev.data.fd = sock;
+	ev.events = event_flags;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) != 0) {
+		perror("epoll_ctr: mod sockfd failed.");
+		return false;
+	}
+	return true;
+}
+
+bool connection_manager::add_message(int sock, std::string message)
+{
+	out_queues[sock].push(message);
+	return continue_write(sock);
+}
+
+bool connection_manager::fetch_message(int sock, std::string &msg)
+{
+	if (!in_queues[sock].empty()) {
+		msg = in_queues[sock].front();
+		if (msg.size() > 0 && msg.back() == '\n') {
+			in_queues[sock].pop();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool connection_manager::receive_messages(int sock)
+{
+	auto count = sockfd_in(sock, in_queues[sock]);
+	if (count == 0) {
+		remove_socket(sock);
+	}
+	return count == 0 ? false : true;
+}
+
+bool connection_manager::send_messages(int sock)
+{
+	int err = sockfd_out(sock, out_queues[sock]);
+
+	if (err == 0 && out_queues[sock].empty()) {
+		pause_write(sock);
+		return true;
+	} else if (err == EAGAIN || err == EWOULDBLOCK) {
+		continue_write(sock);
+		return true;
+	} else {
+		remove_socket(sock);
+		return false;
+	}
+}
+
+int connection_manager::create_connection(std::string host, std::string port)
+{
+	struct addrinfo *ainfo;
+	struct addrinfo hints;
+	std::memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET6; // AF_INET or AF_INET6 to force version
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = 0;
+
+	int status = 0;
+	if ((status = getaddrinfo(NULL, port.c_str(), &hints, &ainfo)) != 0) {
+		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
+		return -1;
+	}
+
+	int sock = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
+
+	if (sock == -1) {
+		perror("socket");
+		return -1;
+	}
+
+	int yes = 1;
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+		perror("setsockopt");
+		remove_socket(sock);
+		return -1;
+	}
+
+	if (set_socket_non_blocking(sock) != 0) {
+		remove_socket(sock);
+		return -1;
+	}
+
+	struct epoll_event ev;
+
+	ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+	ev.data.fd = sock;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sock, &ev) != 0) {
+		perror("epoll_ctl: add sockfd failed.");
+		remove_socket(sock);
+		return -1;
+	}
+
+	if (connect(sock, ainfo->ai_addr, ainfo->ai_addrlen) == -1) {
+		perror("connect");
+		remove_socket(sock);
+		return -1;
+	}
+
+	socks.insert(sock);
+
+	return sock;
 }

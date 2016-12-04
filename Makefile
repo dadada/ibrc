@@ -3,7 +3,6 @@ CXX = g++
 INSTALL = install
 RM = rm -f
 CFLAGS = -Wall \
-	 -D_FORTIFY_SOURCE=2 \
 	 -Wextra -Wcast-align -Wcast-qual -Wpointer-arith \
 	 -Wunreachable-code -Wfloat-equal \
 	 -Wformat=2 -Wredundant-decls -Wundef \
@@ -11,8 +10,12 @@ CFLAGS = -Wall \
 	 -Wstrict-aliasing=2 -Wstrict-overflow=5 -Wconversion \
 	 -Wno-unused-parameter \
 	 -pedantic -std=c++11
-CFLAGS_DEBUG = -g3 -O -DDEBUG
-CFLAGS_RELEASE = -O2 -march=native -mtune=native -ftree-vectorize
+CFLAGS_DEBUG = -g3 -O0 -DDEBUG
+CFLAGS_RELEASE = -O2 -march=native \
+		 -mtune=native \
+		 -ftree-vectorize \
+		 -fstack-protector \
+		 -D_FORTIFY_SOURCE=2
 prefix = $(HOME)
 bindir = $(prefix)/bin
 SRCS = client.cpp data.cpp helpers.cpp server.cpp

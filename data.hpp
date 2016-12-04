@@ -17,14 +17,20 @@ class address
 	private:
 		/* host + " " + port */
 		static std::unordered_map<std::string, address*> host_port_to_addr;
+
+		client_data *peer;
 	public:
 		const std::string host;
 		const std::string port;
 		const int route;
-		const client_data *peer;
+
 
 		address(const std::string hostname, const std::string portnum, 
-				int route_to_next_hop, const client_data *peername);
+				int route_to_next_hop);
+
+		~address();
+
+		client_data* get_peer() const;
 
 		static address* get(std::string);
 };
@@ -34,27 +40,29 @@ std::ostream& operator <<(std::ostream& outs, const address &a);
 class channel
 {
 	private:
-
-		const std::string name;
 		std::string topic;
-		const address op;
-		std::vector<address> subscribers = {};
+
+		std::set<int> subscribers = {};
 
 		static std::unordered_map<std::string, channel*> name_to_channel;
 	public:
-		channel(const std::string channel_name, const address channel_op);
+		const std::string name;
+
+		const address* op;
+
+		channel(const std::string channel_name, const address* channel_op);
+
+		~channel();
 
 		std::string get_topic() const;
 
 		void set_topic(std::string topic);
 
-		std::string get_name() const;
+		std::set<int> get_subscribers() const;
 
-		address get_op() const;
+		void subscribe(int sockfd);
 
-		std::vector<address> get_subscribers() const;
-
-		void subscribe(address addr);
+		void unsubscribe(int sockfd);
 
 		static channel* get(std::string);
 };
@@ -135,12 +143,15 @@ std::istream &operator>>(std::istream &in, msg_type &cmd);
 class client_data
 {
 	private:
-		address addr;
 		std::string nick;
 
 		static std::unordered_map<std::string, client_data*> nick_to_client;
 	public:
-		client_data(address a, std::string n);
+		const address *addr;
+
+		client_data(address *a, std::string n);
+
+		~client_data();
 
 		address get_addr() const;
 
@@ -150,5 +161,7 @@ class client_data
 
 		static client_data* get(std::string name);
 };
+
+client_data* get_client_data(std::string host, std::string port);
 
 #endif /* DATA_HPP */
