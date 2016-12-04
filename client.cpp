@@ -29,30 +29,25 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	try {
-		client c = client(host, port);
-		if (c.run() != 0) {
+	client *c = new client();
+
+	if (c->connect_client(host, port) == 0) {
+		if (c->run() != 0) {
 			std::cerr << "an unknown error occured" << std::endl;
 		}
-	} catch (client_exception& e) {
-		std::cerr << e.what() << std::endl;
+	} else {
+		std::cerr << "Failed to connect." << std::endl;
 	}
 
+	delete c;
 	exit(EXIT_SUCCESS);
 }
 
-client::client(std::string host, std::string server_port)
+client::client()
 {
-	sockfd = STDIN_FILENO; // stdin
+	quit_bit = false;
+	sockfd = -1; // stdin
 	current_channel = ""; // empty channel is no channel
-	if (connect_client(host, server_port) != 0) {
-		throw client_exception();
-	}
-}
-
-client::~client()
-{
-	quit();
 }
 
 const char* client_exception::what() const throw()
@@ -62,10 +57,6 @@ const char* client_exception::what() const throw()
 
 int client::connect_client(std::string host, std::string server_port)
 {
-	if (sockfd != 0) {
-		return -1;
-	}
-
 	struct addrinfo *ainfo;
 	struct addrinfo hints;
 	memset(&hints, 0, sizeof hints);
@@ -94,6 +85,36 @@ int client::connect_client(std::string host, std::string server_port)
 	
 	if (connect(sockfd, ainfo->ai_addr, ainfo->ai_addrlen) == -1) {
 		perror("connect");
+		return -1;
+	}
+
+	struct epoll_event ev;
+
+	epollfd = epoll_create1(0);
+
+	if (epollfd == -1 || (set_socket_non_blocking(sockfd) != 0)
+	  || (set_socket_non_blocking(STDIN_FILENO) != 0)) {
+		return -1;
+	}
+
+	if (epollfd == -1) {
+		perror("epoll_create1");
+		return -1;
+	}
+
+	ev.events = EPOLLIN;
+	ev.data.fd = STDIN_FILENO;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &ev) == -1) {
+		perror("epoll_ctl: add user input fd failed.");
+		return -1;
+	}
+
+	ev.events = EPOLLIN | EPOLLET;
+	ev.data.fd = sockfd;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) != 0) {
+		perror("epoll_ctr: add sockfd failed.");
 		return -1;
 	}
 
@@ -135,46 +156,27 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 
 	msg << msg_name << " " << hostname << " " << port << " " << msg_payload << std::endl;
 
-	const std::string& msg_str = msg.str();
-	const char* sendbuf = msg_str.c_str();
-	if (send(sockfd, sendbuf, strlen(sendbuf), 0) < 0) {
-		perror("send");
+	const std::string msg_str = msg.str();
+	net_output.push(msg_str);
+
+	struct epoll_event ev;
+
+	ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+	ev.data.fd = sockfd;
+
+	if (epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) != 0) {
+		perror("epoll_ctl: mod sockfd failed.");
 		return -1;
 	}
 
 	return 0;
 }
 
-std::string client::receive_message()
-{
-	char buf[2056];
-	ssize_t byte_count;
-
-	// one byte for string terminator
-        byte_count= recv(sockfd, buf, 2055, 0);
-	if (byte_count == -1) {
-		perror("recv");
-		throw receive_error();
-	} else if (byte_count == 0) {
-		disconnect();
-	}
-
-	// terminate the string byte_count < 2056 ?
-	buf[byte_count] = '\0';
-	std::stringstream input;
-	input << buf;
-
-	return input.str();
-}
-
 int client::disconnect()
 {
-	if (sockfd != 0 && send_message("DISCONNECT", "") != 0) {
+	if (send_message("DISCONNECT", "") != 0) {
 		return -1;
 	}
-
-	close(sockfd);
-
 	return 0;
 }
 
@@ -257,69 +259,78 @@ int client::send_private_message(std::string recipient, std::string channel, std
 
 int client::quit()
 {
-	return leave_channel(current_channel) && disconnect() ? 0 : -1;
+	quit_bit = true;
+	return leave_channel(current_channel) == 0 && disconnect() == 0 ? 0 : -1;
 }
 
 int client::run()
 {
-	#define MAX_EVENTS 10
-
-	struct epoll_event ev, events[MAX_EVENTS];
-
-	int epollfd = epoll_create1(0);
-	int user_fd = STDIN_FILENO;
-
-	if (epollfd == -1 || (set_socket_non_blocking(sockfd) != 0)
-	  || (set_socket_non_blocking(user_fd) != 0)) {
-		return -1;
-	}
-
-	if (epollfd == -1) {
-		perror("epoll_create1");
-		return -1;
-	}
-
-	ev.events = EPOLLIN;
-	ev.data.fd = user_fd;
-
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, user_fd, &ev) == -1) {
-		perror("epoll_ctl: add user input fd failed.");
-		return -1;
-	}
-
-	ev.events = EPOLLIN;
-	ev.data.fd = sockfd;
-
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) != 0) {
-		perror("epoll_ctr: add sockfd failed.");
-		return 1;
-	}
+	struct epoll_event events[MAX_EVENTS];
 
 	while (true) {
+		if (quit_bit == true) {
+			return 0;
+		}
 		// no timeout
-		int next_fd = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+		int count = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 
-		if (next_fd == -1) {
+		if (count == -1) {
 			perror("epoll_wait");
 			return -1;
 		}
 
-		for (int n = 0; n < next_fd; ++n) {
-			if (events[n].data.fd == user_fd) {
-				std::string command;
-				std::getline(std::cin, command);
-				process_command(command);
-			} else if (events[n].data.fd == sockfd) {
-				std::string msg = receive_message();
-				process_message(msg);
+		for (int n = 0; n < count; ++n) {
+			struct epoll_event ev = events[n];
+			if (ev.events & EPOLLERR || ev.events & EPOLLHUP) {
+				close(ev.data.fd);
+				quit_bit = true;
+			} else if (ev.data.fd == STDIN_FILENO) {
+				std::string cmd;
+				std::getline(std::cin, cmd);
+				if (process_command(cmd) == false) {
+					std::cerr << "invalid command. see HELP" << std::endl;
+				}
+			} else if (ev.data.fd == sockfd) {
+
+				if (ev.events & EPOLLIN) {
+					if (sockfd_in(ev.data.fd, net_input) == 0) {
+						quit();
+					}
+					consume_net_input();
+				}
+				if (ev.events & EPOLLOUT) {
+					int status = sockfd_out(ev.data.fd, net_output);
+					if (status == 0) {
+						// disable waiting for socket if queue is empty
+						ev.events = EPOLLIN | EPOLLET;
+						if (epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) != 0) {
+							perror("epoll_ctr: mod sockfd failed.");
+							return -1;
+						}
+					}
+				}
 			}
 		}
 	}
-
 	return 0;
 }
 
-bool client::process_command(std::string command)
+void client::consume_net_input()
+{
+	std::stringstream ss;
+	std::string partial;
+	while (!net_input.empty()) {
+		std::string &next = net_input.front();
+		if (next.size() > 0 && next.back() == '\n') {
+			process_message(next);
+			net_input.pop();
+		} else {
+			break;
+		}
+	}
+}
+
+bool client::process_command(std::string &command)
 {
 	std::istringstream cmd_stream(command);
 
@@ -330,75 +341,76 @@ bool client::process_command(std::string command)
 		switch (cmd) {
 			case CONNECT:
 				if (cmd_stream >> par1 >> par2) {
-					connect_client(par1, par2);
+					return (connect_client(par1, par2) == 0);
 				} else {
 					std::cerr << "usage: CONNECT <host> <port>" << std::endl;
 				}
 				break;
 			case DISCONNECT:
-				disconnect();
+				return (disconnect() == 0);
 				break;
 			case NICK:
 				if (cmd_stream >> par1) {
-					set_nick(par1);
+					return (set_nick(par1) == 0);
 				} else {
 					std::cerr << "usage: NICK <new nick>" << std::endl;
 				}
 				break;
 			case JOIN:
 				if (cmd_stream >> par1) {
-					join_channel(par1);
+					return (join_channel(par1) == 0);
 				} else {
 					std::cerr << "usage: JOIN <channel>" << std::endl;
 				}
 				break;
 			case LEAVE:
-				leave_channel(current_channel);
+				return (leave_channel(current_channel) == 0);
 				break;
 			case GETTOPIC:
-				get_topic(current_channel);
+				return (get_topic(current_channel) == 0);
 				break;
 			case SETTOPIC:
 				if (cmd_stream >> par1) {
-					set_topic(current_channel, par1);
+					return (set_topic(current_channel, par1) == 0);
 				} else {
 					std::cerr << "usage: SETTOPIC <topic>" << std::endl;
 				}
 				break;
 			case MSG:
 				if (std::getline(cmd_stream, par1, '\n')) {
-					send_channel_message(current_channel, par1);
+					return (send_channel_message(current_channel, par1) != 0);
 				} else {
 					std::cerr << "usage: MSG <message>" << std::endl;
 				}
 				break;
 			case PRIVMSG:
 				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
-					send_private_message(par1, current_channel, par2);
+					return (send_private_message(par1, current_channel, par2) != 0);
 				} else {
 					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
 				}
 				break;
 			case QUIT:
-				return false;
+				return (quit() != 0);
+				break;
 			case HELP:
-				std::cout << "commands: ";
+				std::cerr << "commands: ";
 				for (auto &c : command_names) {
 					std::cout << c << ", ";
 				}
-				std::cout << HELP << std::endl;
+				std::cerr << HELP << std::endl;
+				return true;
 				break;
 			default:
+				return false;
 				break;
 		}
-	} else {
-		std::cerr << "not a valid command. see HELP for a list of commands" << std::endl;
 	}
-	return true;
+	return false;
 }
 
 
-void client::process_message(std::string msg)
+void client::process_message(std::string& msg)
 {
 	std::istringstream msg_stream(msg);
 	msg_type cmd;
