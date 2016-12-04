@@ -3,17 +3,27 @@
 
 #include <string>
 #include <exception>
+#include <queue>
+#include <istream>
+#include <sstream>
+#include <unistd.h>
 #include "data.hpp"
 
-#define BUFLEN 1024
+#define BUFLEN 2056
 
 int main(int argc, char* argv[]);
 
 class client
 {
 	private:
+		/* if true the client will be closed */
+		bool quit_bit;
+
 		/* The client tcp socket, connected to one server max.*/
 		int sockfd;
+
+		/* epoll fd */
+		int epollfd;
 
 		/* hostname */
 		std::string hostname;
@@ -27,17 +37,20 @@ class client
 		/* null if no channel was joined */
 		std::string current_channel;
 
+		/* receive queue */
+		std::queue<std::string> net_input;
+
+		/* send queue */
+		std::queue<std::string> net_output;
+
+		/* consume net_input */
+		void consume_net_input();
+
 		/* encodes and sends a message */
 		int send_message(std::string msg_name, std::string msg_payload);
 
-		/* receive a message */
-		std::string receive_message();
-
 	public:
-		client(std::string host, std::string port);
-
-		/* leave and disconnect */
-		~client();
+		client();
 
 		/* run the client */
 		int run();
@@ -76,10 +89,10 @@ class client
 		bool connected();
 
 		/* processes the command encoded in msg */
-		bool process_command(std::string command);
+		bool process_command(std::string &command);
 
 		/* processes a message received from the network */
-		void process_message(std::string msg);
+		void process_message(std::string &msg);
 };
 
 class client_exception: public std::exception
