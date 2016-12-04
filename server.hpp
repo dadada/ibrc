@@ -47,6 +47,8 @@ class server
 
 		void send_status(const address *dest, status_code code);
 
+		void send_channel(const address *scr, const channel *chan);
+
 	public:
 		/* creates a new server */
 		server(std::string port);

@@ -38,10 +38,11 @@ address* address::get(std::string name)
 	}
 }
 
-channel::channel(const std::string channel_name, const address *channel_op)
+channel::channel(const std::string channel_name, const client_data *channel_op)
 	: name(channel_name), op(channel_op) 
 {
 	name_to_channel.insert({channel_name, this});
+	subscribe(op->addr->route);
 }
 
 std::string channel::get_topic() const
@@ -154,6 +155,8 @@ std::ostream &operator<<(std::ostream &out, const status_code &code)
 		case privmsg_delivered:
 			out << "successfully delivered private message";
 			break;
+		case nick_not_set:
+			out << "nick not set. try NICK <name>";
 		default:
 			out << "an unknown error occurred";
 			break;
@@ -182,14 +185,15 @@ std::string client_data::get_nick() const
 	return nick;
 }
 
-void client_data::set_nick(std::string nick_name)
+bool client_data::set_nick(std::string nick_name)
 {
 	for (char c : nick_name) {
 		if (!std::isalnum(c)) {
-			return;
+			return false;
 		}
 	}
 	nick = nick_name;
+	return true;
 }
 
 client_data* get_client_data(std::string host, std::string port) {
@@ -214,4 +218,40 @@ client_data::~client_data()
 	if (found != nick_to_client.end()) {
 		nick_to_client.erase(found);
 	}
+}
+
+client_data* client_data::get(std::string name)
+{
+	auto data = nick_to_client.find(name);
+	if (data == nick_to_client.end()) {
+		return nullptr;
+	}
+	return (*data).second;
+}
+
+channel* client_data::get_channel() const
+{
+	return chan;
+}
+
+bool client_data::set_channel(channel *new_chan) {
+	if (chan == nullptr) {
+		chan = new_chan;
+		return true;
+	}
+	return false;
+}
+
+channel* channel::get(std::string name)
+{
+	auto data = name_to_channel.find(name);
+	if (data == name_to_channel.end()) {
+		return nullptr;
+	}
+	return (*data).second;
+}
+
+void channel::unsubscribe(int sockfd)
+{
+	subscribers.erase(sockfd);
 }

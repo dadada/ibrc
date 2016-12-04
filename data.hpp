@@ -37,6 +37,8 @@ class address
 
 std::ostream& operator <<(std::ostream& outs, const address &a);
 
+class client_data;
+
 class channel
 {
 	private:
@@ -48,9 +50,9 @@ class channel
 	public:
 		const std::string name;
 
-		const address* op;
+		const client_data* op;
 
-		channel(const std::string channel_name, const address* channel_op);
+		channel(const std::string channel_name, const client_data* channel_op);
 
 		~channel();
 
@@ -78,6 +80,7 @@ enum status_code
 	nick_unique = 300,
 	nick_not_authorized = 301,
 	nick_not_unique = 302,
+	nick_not_set = 303,
 	join_known_success = 400,
 	join_new_success = 401,
 	not_in_channel = 402,
@@ -145,6 +148,8 @@ class client_data
 	private:
 		std::string nick;
 
+		channel *chan;
+
 		static std::unordered_map<std::string, client_data*> nick_to_client;
 	public:
 		const address *addr;
@@ -157,7 +162,11 @@ class client_data
 
 		std::string get_nick() const;
 
-		void set_nick(std::string nick_name);
+		bool set_nick(std::string nick_name);
+
+		channel* get_channel() const;
+
+		bool set_channel(channel *chan);
 
 		static client_data* get(std::string name);
 };

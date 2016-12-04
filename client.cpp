@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 
 	if (c->connect_client(host, port) == 0) {
 		if (c->run() != 0) {
-			std::cerr << "an unknown error occured" << std::endl;
+			std::cerr << "oopsi" << std::endl;
 		}
 	} else {
 		std::cerr << "Failed to connect." << std::endl;
