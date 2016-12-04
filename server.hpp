@@ -31,6 +31,8 @@ class server
 
 		void do_leave(std::istringstream &smsg, int source);
 
+		void do_list(std::istringstream &smsg, int source);
+
 		void do_gettopic(std::istringstream &smsg, int source);
 
 		void do_settopic(std::istringstream &smsg, int source);

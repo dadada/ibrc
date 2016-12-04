@@ -82,6 +82,9 @@ class client
 		/* sends a private message to a client (nick) in a channel */
 		int send_private_message(std::string recipient, std::string channel, std::string message);
 
+		/* sends a request for a list of all channels */
+		int send_list();
+
 		/* leaves the current channel, disconnects from the newtwork, stops the client */
 		int quit();
 

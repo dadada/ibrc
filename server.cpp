@@ -164,6 +164,8 @@ void server::process_message(std::string msg, int source)
 			case LEAVE:
 				do_leave(smsg, source);
 				break;
+			case LIST:
+				do_list(smsg, source);
 			case GETTOPIC:
 				do_gettopic(smsg, source);
 				break;
@@ -314,33 +316,39 @@ void server::do_leave(std::istringstream &smsg, int source)
 {
 	std::string host, port, chan_name;
 	if (!(smsg >> host >> port >> chan_name)) {
-		address *src = address::get(host + " " + port);
-		if (src == nullptr) {
-			return;
+		return;
+	}
+	address *src = address::get(host + " " + port);
+	if (src == nullptr) {
+		return;
+	}
+	channel *chan = channel::get(chan_name);
+	if (chan == nullptr) {
+		send_status(src, no_such_channel);
+		return;
+	}
+	auto subs = chan->get_subscribers();
+	if (subs.find(src->route) == subs.end()) {
+		send_status(src, not_in_channel);
+		return;
+	}
+	chan->unsubscribe(src->route);
+	send_status(src, leave_successful);
+	if (subs.empty()) {
+		if (parent) {
+			conman->add_message(parent, smsg.str());
 		}
-		channel *chan = channel::get(chan_name);
-		if (chan == nullptr) {
-			send_status(src, no_such_channel);
-			return;
-		}
-		auto subs = chan->get_subscribers();
-		if (subs.find(src->route) == subs.end()) {
-			send_status(src, not_in_channel);
-			return;
-		}
-		chan->unsubscribe(src->route);
-		send_status(src, leave_successful);
-		if (subs.empty()) {
-			if (parent) {
-				conman->add_message(parent, smsg.str());
-			}
-			delete chan;
-		}
+		delete chan;
 	}
 }
 
 void server::do_gettopic(std::istringstream &smsg, int source)
 {
+	std::string host, port, chan_name;
+	if (!(smsg >> host >> port >> chan_name)) {
+		return;
+	}
+	return;
 }
 
 void server::do_settopic(std::istringstream &smsg, int source)
@@ -359,6 +367,9 @@ void server::do_topic(std::istringstream &smsg, int source)
 {}
 
 void server::do_nickres(std::istringstream &smsg, int source)
+{}
+
+void server::do_list(std::istringstream &smsg, int source)
 {}
 
 const char* server_exception::what() const throw()

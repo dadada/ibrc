@@ -393,6 +393,9 @@ bool client::process_command(std::string &command)
 					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
 				}
 				break;
+			case LIST:
+				return (send_list() != 0);
+				break;
 			case QUIT:
 				return (quit() != 0);
 				break;
@@ -443,4 +446,12 @@ void client::process_message(std::string& msg)
 				break;
 		}
 	}
+}
+
+int client::send_list()
+{
+	if (send_message("LIST", "") != 0) {
+		return -1;
+	}
+	return 0;
 }
