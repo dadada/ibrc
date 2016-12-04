@@ -166,6 +166,8 @@ void server::process_message(std::string msg, int source)
 				break;
 			case LIST:
 				do_list(smsg, source);
+			case LISTRES:
+				do_listres(smsg, source);
 			case GETTOPIC:
 				do_gettopic(smsg, source);
 				break;
@@ -374,8 +376,13 @@ void server::do_list(std::istringstream &smsg, int source)
 	if (parent) {
 		conman->add_message(parent, smsg.str());
 	} else {
+
+		std::string host, port;
+		if (!(smsg >> host >> port)) {
+			return;
+		}
 		std::ostringstream out;
-		out << "LISTRES";
+		out << "LISTRES " << host << " " << port;
 		for (auto name : channel::get_channel_list()) {
 			out << " " << name;
 		}
@@ -383,6 +390,22 @@ void server::do_list(std::istringstream &smsg, int source)
 		conman->add_message(source, out.str());
 	}
 
+}
+
+void server::do_listres(std::istringstream &smsg, int source)
+{
+	if (source != parent) {
+		return;
+	}
+	std::string host, port;
+	if (!(smsg >> host >> port)) {
+		return;
+	}
+	address *dest = address::get(host + " " + port);
+	if (dest == nullptr) { // dest not known
+		return;
+	}
+	conman->add_message(dest->route, smsg.str());
 }
 
 const char* server_exception::what() const throw()

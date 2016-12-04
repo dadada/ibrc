@@ -47,6 +47,8 @@ class server
 
 		void do_nickres(std::istringstream &smsg, int source);
 
+		void do_listres(std::istringstream &smsg, int source);
+
 		void send_status(const address *dest, status_code code);
 
 		void send_channel(const address *scr, const channel *chan);
