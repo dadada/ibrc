@@ -314,12 +314,12 @@ int connection_manager::create_connection(std::string host, std::string port)
 	struct addrinfo *ainfo;
 	struct addrinfo hints;
 	std::memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET6; // AF_INET or AF_INET6 to force version
+	hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = 0;
 
 	int status = 0;
-	if ((status = getaddrinfo(NULL, port.c_str(), &hints, &ainfo)) != 0) {
+	if ((status = getaddrinfo(host.c_str(), port.c_str(), &hints, &ainfo)) != 0) {
 		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
 		return -1;
 	}
