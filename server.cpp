@@ -75,7 +75,8 @@ server::server(std::string port)
 		delete conman;
 		throw server_exception();
 	}
-	parent = 0;
+	parent = -1;
+	root = true;
 }
 
 server::~server()
@@ -85,12 +86,9 @@ server::~server()
 
 bool server::connect_parent(std::string host, std::string port)
 {
-	if (parent != 0) {
-		return false;
-	} else {
-		parent = conman->create_connection(host, port);
-		return parent != 0;
-	}
+	root = false;
+	parent = conman->create_connection(host, port);
+	return parent > 0;
 }
 
 bool server::run()
@@ -127,7 +125,8 @@ bool server::run()
 							process_message(msg, ev.data.fd);
 						}
 					} else {
-						std::cerr << "failed to receive messages" << std::endl;
+						// TODO remove data for client
+						std::cerr << "connection closed" << std::endl;
 					}
 				} else if (ev.events & EPOLLOUT) {
 					if (!conman->send_messages(ev.data.fd)) {
@@ -189,6 +188,9 @@ void server::process_message(std::string msg, int source)
 			case NICKRES:
 				do_nickres(smsg, source);
 				break;
+			case CHANNEL:
+				do_channel(smsg, source);
+				break;
 			default:
 				// do_nothing
 				break;
@@ -210,7 +212,7 @@ void server::do_connect(std::istringstream &smsg, int source)
 	std::string host, port;
 	if (smsg >> host >> port) {
 		address *naddr = new address(host, port, source);
-		if (parent) {
+		if (!root) {
 			conman->add_message(parent, smsg.str());
 			return;
 		} else {
@@ -230,7 +232,7 @@ void server::do_disconnect(std::istringstream &smsg, int source)
 		}
 		if (src->route == source) {
 			delete src;
-			if (parent) {
+			if (!root) {
 				conman->add_message(parent, smsg.str());
 			}
 		} else {
@@ -254,13 +256,13 @@ void server::do_nick(std::istringstream &smsg, int source)
 		return;
 	}
 	if (client_data::get(nick) == nullptr) { // nick unique
-		if (parent) {
+		if (!root) {
 			conman->add_message(parent, smsg.str());
 			return;
 		}
 		if (src->get_peer()->set_nick(nick)) {
 			send_status(src, nick_unique);
-			conman->add_message(src->route, "NICKRES " + host + " " + port + " " + nick);
+			conman->add_message(src->route, "NICKRES " + host + " " + port + " " + nick + '\n');
 			return;
 		}
 	} else {
@@ -288,13 +290,11 @@ void server::do_join(std::istringstream &smsg, int source)
 		return;
 	}
 	channel *chan = channel::get(chan_name);
-	if (chan == nullptr) {
-		// create channel
-		if (parent) {
-			chan->subscribe(src->route);
+	if (chan == nullptr) { // create channel
+		if (!root) {
 			conman->add_message(parent, smsg.str());
 			return;
-		}
+		} // root
 		chan = new channel(chan_name, src->get_peer());
 		src->get_peer()->set_channel(chan);
 		send_status(src, join_new_success);
@@ -309,8 +309,8 @@ void server::do_join(std::istringstream &smsg, int source)
 void server::send_channel(const address *src, const channel *chan)
 {
 	std::ostringstream reply;
-	reply << "CHANNEL " << " " << src->host << " " << src->port << " " 
-		<< chan->name << " " << chan->get_topic() << chan->op->get_nick();
+	reply << "CHANNEL" << " " << src->host << " " << src->port << " " 
+		<< chan->name << " " <<  chan->op->get_nick() << " " << chan->get_topic();
 	conman->add_message(src->route, reply.str());
 }
 
@@ -337,7 +337,7 @@ void server::do_leave(std::istringstream &smsg, int source)
 	chan->unsubscribe(src->route);
 	send_status(src, leave_successful);
 	if (subs.empty()) {
-		if (parent) {
+		if (!root) {
 			conman->add_message(parent, smsg.str());
 		}
 		delete chan;
@@ -349,38 +349,163 @@ void server::do_gettopic(std::istringstream &smsg, int source)
 	std::string host, port, chan_name;
 	if (!(smsg >> host >> port >> chan_name)) {
 		return;
-	} // TODO
-	return;
+	}
+	address *src = address::get(host + " " + port);
+	if (src == nullptr) {
+		return;
+	}
+	channel *chan = channel::get(chan_name);
+	if (chan != nullptr) { // known channel, sending reply
+		std::ostringstream reply;
+		reply << "TOPIC " << host << " " << port << " " 
+			<< chan_name << " " << chan->get_topic() << std::endl;
+		conman->add_message(source, reply.str());
+		return;
+	} // forwarding
+	if (!root) {
+		conman->add_message(parent, smsg.str());
+		return;
+	}
+	send_status(src, no_such_channel);
 }
 
 void server::do_settopic(std::istringstream &smsg, int source)
-{}
+{
+	std::string host, port, chan_name, topic;
+	if (!(smsg >> host >> port >> chan_name && std::getline(smsg, topic, '\n'))) {
+		return;
+	}
+	if (topic.size() > 0) { // leading space
+		topic = topic.substr(1, topic.size());
+	}
+	address *src = address::get(host + " " + port);
+	if (src == nullptr) {
+		return;
+	}
+	channel *chan = channel::get(chan_name);
+	if (chan == nullptr) {
+		send_status(src, no_such_channel);
+		return;
+	}
+	if (chan->op == src->get_peer()) {
+		chan->set_topic(topic);
+	}
+	send_to_channel(chan, smsg.str(), source);
+}
 
-void server::do_msg(std::istringstream &smsge, int source)
-{}
+void server::do_msg(std::istringstream &smsg, int source)
+{
+	std::string host, port, chan_name, msg;
+	if (!(smsg >> host >> port >> chan_name) || !(std::getline(smsg, msg, '\n'))) {
+		return;
+	}
+	address *src = address::get(host + " " + port);
+	if (src == nullptr) {
+		return;
+	}
+	channel *chan = channel::get(chan_name);
+	if (chan == nullptr) {
+		send_status(src, no_such_channel);
+		return;
+	}
+	if (src->get_peer()->get_channel() != chan) {
+		send_status(src, not_in_channel);
+		return;
+	}
+	send_to_channel(chan, smsg.str(), source);
+	send_status(src, msg_delivered);
+}
 
 void server::do_privmsg(std::istringstream &smsg, int source)
-{}
+{
+	std::string host, port, nick, chan_name, msg;
+	if (!(smsg >> host >> port >> nick >> chan_name) || !(std::getline(smsg, msg, '\n'))) {
+		return;
+	}
+	address *src = address::get(host + " " + port);
+	if (src == nullptr) {
+		return;
+	}
+	channel *chan = channel::get(chan_name);
+	if (chan == nullptr) {
+		send_status(src, no_such_channel);
+		return;
+	}
+	client_data *dest = client_data::get(nick);
+	if (dest == nullptr) {
+		if (source == parent) {
+			send_status(src, no_such_client_in_channel);
+		}
+		else if (parent) {
+			conman->add_message(parent, smsg.str());
+		}
+		return;
+	}
+	conman->add_message(dest->addr->route, smsg.str());
+}
 
 void server::do_status(std::istringstream &smsg, int source)
-{}
+{
+	std::string host, port;
+	status_code status;
+	if (!(smsg >> host >> port >> status)) {
+		return;
+	}
+	address *dest = address::get(host + " " + port);
+	if (dest == nullptr) {
+		if (source != parent) {
+			conman->add_message(parent, smsg.str());
+		} // else drop
+		return;
+	}
+	conman->add_message(dest->route, smsg.str());
+}
 
 void server::do_topic(std::istringstream &smsg, int source)
-{}
+{
+	std::string host, port, chan_name, topic;
+	status_code status;
+	if (!(smsg >> host >> port >> chan_name) || !(std::getline(smsg, topic, '\n'))) {
+		return;
+	}
+	address *dest = address::get(host + " " + port);
+	if (dest == nullptr) {
+		if (source != parent) {
+			conman->add_message(parent, smsg.str());
+		} // else drop
+		return;
+	}
+	conman->add_message(dest->route, smsg.str());
+}
 
 void server::do_nickres(std::istringstream &smsg, int source)
-{}
+{
+	std::string host, port, nick;
+	status_code status;
+	if (!(smsg >> host >> port >> nick)) {
+		return;
+	}
+	address *dest = address::get(host + " " + port);
+	if (source != parent && dest == nullptr) {
+		return;
+	}
+	dest->get_peer()->set_nick(nick);
+	conman->add_message(dest->route, smsg.str());
+}
 
 void server::do_list(std::istringstream &smsg, int source)
 {
-	if (parent) {
+	std::string host, port;
+	if (!(smsg >> host >> port)) {
+	       return;
+	}	       
+	address *src = address::get(host + " " + port);
+	if (src == nullptr || src->route != source) {
+		return;
+	}
+	if (!root) {
 		conman->add_message(parent, smsg.str());
 	} else {
-
-		std::string host, port;
-		if (!(smsg >> host >> port)) {
-			return;
-		}
 		std::ostringstream out;
 		out << "LISTRES " << host << " " << port;
 		for (auto name : channel::get_channel_list()) {
@@ -389,7 +514,35 @@ void server::do_list(std::istringstream &smsg, int source)
 		out << std::endl;
 		conman->add_message(source, out.str());
 	}
+}
 
+void server::do_channel(std::istringstream &smsg, int source)
+{
+	std::string host, port, chan_name, topic, op;
+	if (!(smsg >> host >> port >> chan_name >> op && std::getline(smsg, topic, '\n')))  {
+		return;
+	}
+	if (topic.size() > 0) { // leading space
+		topic = topic.substr(1, topic.size());
+	}
+	address *dest = address::get(host + " " + port);
+	client_data *chanop = client_data::get(op);
+	if (chanop == nullptr) {
+		return;
+	}
+	if (source == parent) {
+		channel *chan = channel::get(chan_name);
+		if (chan != nullptr) {
+			chan->op = chanop;
+			chan->set_topic(topic);
+		} else {
+			chan = new channel(chan_name, chanop);
+			chan->set_topic(topic);
+		}
+	}
+	if (dest != nullptr) {
+		conman->add_message(dest->route, smsg.str());
+	}
 }
 
 void server::do_listres(std::istringstream &smsg, int source)
@@ -406,6 +559,16 @@ void server::do_listres(std::istringstream &smsg, int source)
 		return;
 	}
 	conman->add_message(dest->route, smsg.str());
+}
+
+void server::send_to_channel(channel *chan, std::string msg, int source)
+{
+	auto subs = chan->get_subscribers();
+	for (auto s : subs) {
+		if (s != source) {
+			conman->add_message(s, msg);
+		}
+	}
 }
 
 const char* server_exception::what() const throw()

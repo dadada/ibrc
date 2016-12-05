@@ -70,7 +70,7 @@ int sockfd_out(int sock, std::queue<std::string> &out_queue)
 {	
 	while (!out_queue.empty()) {
 		auto &msg = out_queue.front();
-		// TODO remove
+		//TODO remove
 		std::cout << "sending: " << msg;
 		//
 		ssize_t bytes_written = send(sock, msg.c_str(), msg.size(), 0);
@@ -79,7 +79,7 @@ int sockfd_out(int sock, std::queue<std::string> &out_queue)
 		if (bytes_written < 1) {
 			return err;
 		} else if (static_cast<unsigned long>(bytes_written) < msg.size()) {
-			out_queue.front() = msg.substr(bytes_written - 1, msg.size());
+			out_queue.front() = msg.substr(bytes_written, msg.size());
 		} else {
 			out_queue.pop();
 		}

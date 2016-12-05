@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
 	client *c = new client();
 
 	if (c->connect_client(host, port) == 0) {
-		if (c->run() != 0) {
+		if (!(c->run())) {
 			std::cerr << "oopsi" << std::endl;
 		}
 	} else {
@@ -241,7 +241,7 @@ int client::set_topic(std::string chan_name, std::string new_channel_topic)
 
 int client::send_channel_message(std::string channel_name, std::string message)
 {
-	if (send_message("MSG", channel_name + " " + message) != 0) {
+	if (send_message("MSG", channel_name + message) != 0) {
 		return -1;
 	}
 
@@ -268,9 +268,6 @@ int client::run()
 	struct epoll_event events[MAX_EVENTS];
 
 	while (true) {
-		if (quit_bit == true) {
-			return 0;
-		}
 		// no timeout
 		int count = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 
@@ -306,6 +303,9 @@ int client::run()
 						if (epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) != 0) {
 							perror("epoll_ctr: mod sockfd failed.");
 							return -1;
+						}
+						if (quit_bit) {
+							return true;
 						}
 					}
 				}
@@ -373,7 +373,7 @@ bool client::process_command(std::string &command)
 				return (get_topic(current_channel) == 0);
 				break;
 			case SETTOPIC:
-				if (cmd_stream >> par1) {
+				if (getline(cmd_stream, par1, '\n')) {
 					return (set_topic(current_channel, par1) == 0);
 				} else {
 					std::cerr << "usage: SETTOPIC <topic>" << std::endl;
@@ -387,17 +387,17 @@ bool client::process_command(std::string &command)
 				}
 				break;
 			case PRIVMSG:
-				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
-					return (send_private_message(par1, current_channel, par2) != 0);
+				if (std::getline(cmd_stream, par1, '\n')) {
+					return (send_private_message(par1, current_channel, par1) != 0);
 				} else {
 					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
 				}
 				break;
 			case LIST:
-				return (send_list() != 0);
+				return (send_list() == 0);
 				break;
 			case QUIT:
-				return (quit() != 0);
+				return (quit() == 0);
 				break;
 			case HELP:
 				std::cerr << "commands: ";
@@ -418,12 +418,16 @@ bool client::process_command(std::string &command)
 
 void client::process_message(std::string& msg)
 {
+	// TODO remove
+	std::cout << "receiving: " << msg;
+	//
 	std::istringstream msg_stream(msg);
 	msg_type cmd;
 	std::string dest_host;
 	int dest_port;
 	status_code status;
 	std::string topic;
+	std::string par1, par2, par3;
 	if (msg_stream >> cmd >> dest_host >> dest_port 
 	  && dest_host == hostname && dest_port == port) {
 		switch (cmd) {
@@ -445,10 +449,17 @@ void client::process_message(std::string& msg)
 				std::cout << std::endl;
 				break;
 			case TOPIC:
-				if (msg_stream >> topic) {
-					std::cout << "topic: " << topic << std::endl;
+				if (msg_stream >> par1 && std::getline(msg_stream, par2, '\n')) {
+					std::cout << "topic for " << par1 << "is " << par2 << std::endl;
 				}
 				break;
+			case CHANNEL:
+				if (msg_stream >> par1 >> par2 && std::getline(msg_stream, par3, '\n')) {
+					std::cout << "channel: you are joined to " << par1
+						<< " as" << (nick == par2 ? "OP" : "user")
+						<< ", the topic is" << par3 << std::endl;
+					current_channel = par1;
+				}
 			default:
 				break;
 		}

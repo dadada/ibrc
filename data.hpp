@@ -50,9 +50,9 @@ class channel
 	public:
 		const std::string name;
 
-		const client_data* op;
+		client_data* op;
 
-		channel(const std::string channel_name, const client_data* channel_op);
+		channel(const std::string channel_name, client_data* channel_op);
 
 		~channel();
 
@@ -122,6 +122,7 @@ enum msg_type
 	QUIT,
 	HELP,
 	STATUS,
+	CHANNEL,
 	TOPIC,
 	NICKRES,
 };
@@ -142,7 +143,8 @@ static std::vector<std::string> command_names = {
 		"HELP",
 		"STATUS",
 		"TOPIC",
-		"NICKRES"
+		"NICKRES",
+		"CHANNEL",
 		};
 
 std::ostream &operator<<(std::ostream &out, const msg_type &cmd);

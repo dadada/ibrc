@@ -11,6 +11,9 @@ int main(int argc, char* argv[]);
 class server
 {
 	private:
+		/* is root */
+		bool root;
+
 		/* socket accepts clients */
 		int accepting;
 
@@ -49,9 +52,13 @@ class server
 
 		void do_listres(std::istringstream &smsg, int source);
 
+		void do_channel(std::istringstream &smsg, int source);
+
 		void send_status(const address *dest, status_code code);
 
 		void send_channel(const address *scr, const channel *chan);
+
+		void send_to_channel(channel *chan, std::string msg, int source);
 
 	public:
 		/* creates a new server */

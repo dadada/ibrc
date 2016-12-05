@@ -38,11 +38,12 @@ address* address::get(std::string name)
 	}
 }
 
-channel::channel(const std::string channel_name, const client_data *channel_op)
+channel::channel(const std::string channel_name, client_data *channel_op)
 	: name(channel_name), op(channel_op) 
 {
 	name_to_channel.insert({channel_name, this});
 	subscribe(op->addr->route);
+	topic = "";
 }
 
 std::string channel::get_topic() const
@@ -92,7 +93,8 @@ std::istream &operator>>(std::istream &in, msg_type &cmd) {
                         {"HELP", HELP},
                         {"STATUS", STATUS},
                         {"TOPIC", TOPIC},
-                        {"NICKRES", NICKRES}
+                        {"NICKRES", NICKRES},
+                        {"CHANNEL", CHANNEL}
 	};
 	std::string name;
 	in >> name;
@@ -159,6 +161,7 @@ std::ostream &operator<<(std::ostream &out, const status_code &code)
 			break;
 		case nick_not_set:
 			out << "nick not set. try NICK <name>";
+			break;
 		default:
 			out << "an unknown error occurred";
 			break;
@@ -179,6 +182,7 @@ std::istream &operator>>(std::istream &in, status_code &status)
 client_data::client_data(address *a, std::string nick_name) 
 	: nick(nick_name), addr(a)
 {
+	chan = nullptr;
 	nick_to_client.insert({nick_name, this});
 }
 
@@ -195,6 +199,7 @@ bool client_data::set_nick(std::string nick_name)
 		}
 	}
 	nick = nick_name;
+	nick_to_client.insert({nick_name, this});
 	return true;
 }
 
