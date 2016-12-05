@@ -335,8 +335,8 @@ void server::do_leave(std::istringstream &smsg, int source)
 	}
 	chan->unsubscribe(src->route);
 	send_status(src, leave_successful);
-	conman->add_message(parent, smsg.str());
-	if (chan->get_subscribers().empty()) {
+	if (chan->get_subscribers().empty() || chan->op == src->get_peer()->get_nick()) {
+		conman->add_message(parent, smsg.str());
 		delete chan;
 	}
 }
@@ -402,8 +402,8 @@ void server::do_settopic(std::istringstream &smsg, int source)
 
 void server::do_msg(std::istringstream &smsg, int source)
 {
-	std::string host, port, chan_name, msg;
-	if (!(smsg >> host >> port >> chan_name) || !(std::getline(smsg, msg, '\n'))) {
+	std::string host, port, chan_name, msg, sender;
+	if (!(smsg >> host >> port >> chan_name >> sender) || !(std::getline(smsg, msg, '\n'))) {
 		return;
 	}
 	if (msg.size() > 0) {
@@ -416,11 +416,12 @@ void server::do_msg(std::istringstream &smsg, int source)
 		if (chan != nullptr) {
 			send_to_channel(chan, smsg.str(), source);
 		} else {
-			send_status(src, no_such_channel);
+			if (src != nullptr) {
+				send_status(src, no_such_channel);
+			}
 		}
-	}
-	else if (source != parent && src != nullptr) {
-	       	if (chan->check_subscribed(src->route)) {
+	} else if (source != parent && src != nullptr) {
+	       	if (chan != nullptr && chan->check_subscribed(src->route)) {
 			send_to_channel(chan, smsg.str(), source);
 			send_status(src, msg_delivered);
 		} else {
@@ -431,30 +432,37 @@ void server::do_msg(std::istringstream &smsg, int source)
 
 void server::do_privmsg(std::istringstream &smsg, int source)
 {
-	std::string host, port, nick, chan_name, msg;
-	if (!(smsg >> host >> port >> nick >> chan_name) || !(std::getline(smsg, msg, '\n'))) {
+	std::string host, port, nick, chan_name, msg, sender;
+	if (!(smsg >> host >> port >> chan_name >> sender >> nick) || !(std::getline(smsg, msg, '\n'))) {
 		return;
 	}
-	address *src = address::get(host + " " + port);
-	if (src == nullptr) {
-		return;
-	}
-	channel *chan = channel::get(chan_name);
-	if (chan == nullptr) {
-		send_status(src, no_such_channel);
-		return;
+	if (msg.size() > 0) {
+		msg = msg.substr(1, msg.size());
 	}
 	client_data *dest = client_data::get(nick);
-	if (dest == nullptr) {
-		if (source == parent) {
-			send_status(src, no_such_client_in_channel);
+	address *src = address::get(host + " " + port);
+	channel *chan = channel::get(chan_name);
+
+	if (!root && source == parent) {
+		if (chan != nullptr) {
+			if (dest != nullptr) {
+				conman->add_message(dest->addr->route, smsg.str());
+			}
+		} else {
+			if (src != nullptr) {
+				send_status(src, no_such_channel);
+			}
 		}
-		else if (parent) {
-			conman->add_message(parent, smsg.str());
+	} else if (source != parent && src != nullptr) {
+	       	if (chan != nullptr && chan->check_subscribed(src->route)) {
+			if (dest != nullptr) {
+				conman->add_message(dest->addr->route, smsg.str());
+				send_status(src, msg_delivered);
+			}
+		} else {
+			send_status(src, not_in_channel);
 		}
-		return;
 	}
-	conman->add_message(dest->addr->route, smsg.str());
 }
 
 void server::do_status(std::istringstream &smsg, int source)

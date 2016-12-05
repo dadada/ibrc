@@ -196,14 +196,14 @@ int client::join_channel(std::string chan_name)
 	if (current_channel == chan_name) {
 		std::cout << "channel: current channel is " << chan_name << std::endl;
 		return 0;
+	} else if (current_channel == "") {
+		int status = send_message("JOIN", chan_name);
+		if (status != 0) {
+			return -1;
+		}
 	}
-
-	int status = send_message("JOIN", chan_name);
-	if (status != 0) {
-		return -1;
-	}
-
-	return 0;
+	std::cout << "channel: already in channel " << chan_name << std::endl;
+	return -1;
 }
 
 int client::leave_channel(std::string chan_name)
@@ -242,7 +242,7 @@ int client::set_topic(std::string chan_name, std::string new_channel_topic)
 
 int client::send_channel_message(std::string channel_name, std::string message)
 {
-	if (send_message("MSG", channel_name + " " + message) != 0) {
+	if (send_message("MSG", channel_name + " " + nick + " " + message) != 0) {
 		return -1;
 	}
 
@@ -251,7 +251,7 @@ int client::send_channel_message(std::string channel_name, std::string message)
 
 int client::send_private_message(std::string recipient, std::string channel, std::string message)
 {
-	if (send_message("PRIVMSG", recipient + " " + channel + " " + message) != 0) {
+	if (send_message("PRIVMSG", channel + " " + nick + " " + recipient + " " + message) != 0) {
 		return -1;
 	}
 
@@ -388,8 +388,8 @@ bool client::process_command(std::string &command)
 				}
 				break;
 			case PRIVMSG:
-				if (std::getline(cmd_stream, par1, '\n')) {
-					return (send_private_message(par1, current_channel, par1.substr(1,par1.size())) != 0);
+				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
+					return (send_private_message(par1, current_channel, par2.substr(1,par2.size())) != 0);
 				} else {
 					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
 				}
@@ -429,40 +429,57 @@ void client::process_message(std::string& msg)
 	status_code status;
 	std::string topic;
 	std::string par1, par2, par3;
-	if (msg_stream >> cmd >> dest_host >> dest_port 
-	  && dest_host == hostname && dest_port == port) {
-		switch (cmd) {
-			case STATUS:
-				if (msg_stream >> status) {
-					std::cout << "status: " << status << std::endl;
-				}
-				break;
-			case NICKRES:
-				if (msg_stream >> nick) {
-					std::cout << "nick: you are now known as " << nick << std::endl;
-				}
-				break;
-			case LISTRES:
-				std::cout << "listres: ";
-				while (msg_stream >> nick) {
-					std::cout << nick << ", ";
-				}
-				std::cout << std::endl;
-				break;
-			case TOPIC:
-				if (msg_stream >> par1 && std::getline(msg_stream, par2, '\n')) {
-					std::cout << "topic for " << par1 << "is " << par2 << std::endl;
-				}
-				break;
-			case CHANNEL:
-				if (msg_stream >> par1 >> par2 && std::getline(msg_stream, par3, '\n')) {
-					std::cout << "channel: you are joined to " << par1
-						<< " as" << (nick == par2 ? "OP" : "user")
-						<< ", the topic is" << par3.substr(1, par3.size()) << std::endl;
-					current_channel = par1;
-				}
-			default:
-				break;
+	if (msg_stream >> cmd >> dest_host >> dest_port) {
+		if (dest_host == hostname && dest_port == port) {
+			switch (cmd) {
+				case STATUS:
+					if (msg_stream >> status) {
+						std::cout << "status: " << status << std::endl;
+					}
+					break;
+				case NICKRES:
+					if (msg_stream >> nick) {
+						std::cout << "nick: you are now known as " << nick << std::endl;
+					}
+					break;
+				case LISTRES:
+					std::cout << "listres: ";
+					while (msg_stream >> nick) {
+						std::cout << nick << ", ";
+					}
+					std::cout << std::endl;
+					break;
+				case TOPIC:
+					if (msg_stream >> par1 && std::getline(msg_stream, par2, '\n')) {
+						std::cout << "topic for " << par1 << "is " << par2 << std::endl;
+					}
+					break;
+
+				case CHANNEL:
+					if (msg_stream >> par1 >> par2 && std::getline(msg_stream, par3, '\n')) {
+						std::cout << "channel: you are joined to " << par1
+							<< " as " << (nick == par2 ? "OP" : "user")
+							<< ", the topic is " << par3.substr(1, par3.size()) << std::endl;
+						current_channel = par1;
+					}
+				default:
+					break;
+			}
+		} else if (msg_stream >> par1 && par1 == current_channel) {
+			switch (cmd) {
+				case MSG:
+					if (msg_stream >> par2 && std::getline(msg_stream, par3, '\n')) {
+						std::cout << "message: " << par1 << ": " << par2 << ": " << par3 << std::endl;
+					}
+					break;
+				case PRIVMSG:
+					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par3, '\n')) {
+						std::cout << "private message: " << par1 << ": " << par2 << ": " << par3.substr(1,par3.size()) << std::endl;
+					}
+					break;
+				default:
+					break;
+			}
 		}
 	}
 }
