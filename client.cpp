@@ -88,6 +88,27 @@ int client::connect_client(std::string host, std::string server_port)
 		return -1;
 	}
 
+	char hostn[1024];
+	hostn[1023] = '\0';
+	gethostname(hostn, 1023);
+	hostname = std::string(hostn);
+
+	socklen_t len;
+	struct sockaddr_storage addr;
+
+	if (getsockname(sockfd, (struct sockaddr*)&addr, &len) != 0) {
+		perror("getpeername");
+		return -1;
+	}
+	
+	if (addr.ss_family == AF_INET) {
+		struct sockaddr_in *s = (struct sockaddr_in *)&addr;
+		port = ntohs(s->sin_port);
+	} else {
+		struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
+		port = ntohs(s->sin6_port);
+	}
+
 	struct epoll_event ev;
 
 	epollfd = epoll_create1(0);
@@ -116,27 +137,6 @@ int client::connect_client(std::string host, std::string server_port)
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) != 0) {
 		perror("epoll_ctr: add sockfd failed.");
 		return -1;
-	}
-
-	char hostn[1024];
-	hostn[1023] = '\0';
-	gethostname(hostn, 1023);
-	hostname = std::string(hostn);
-
-	socklen_t len;
-	struct sockaddr_storage addr;
-
-	if (getsockname(sockfd, (struct sockaddr*)&addr, &len) != 0) {
-		perror("getpeername");
-		return -1;
-	}
-	
-	if (addr.ss_family == AF_INET) {
-		struct sockaddr_in *s = (struct sockaddr_in *)&addr;
-		port = ntohs(s->sin_port);
-	} else {
-		struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
-		port = ntohs(s->sin6_port);
 	}
 	
 	if (send_message("CONNECT", "") != 0) {
