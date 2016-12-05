@@ -94,7 +94,24 @@ std::istream &operator>>(std::istream &in, msg_type &cmd) {
                         {"STATUS", STATUS},
                         {"TOPIC", TOPIC},
                         {"NICKRES", NICKRES},
-                        {"CHANNEL", CHANNEL}
+                        {"CHANNEL", CHANNEL},
+			{"connect", CONNECT},
+			{"disconnect", DISCONNECT},
+                        {"nick", NICK},
+                        {"join", JOIN},
+                        {"leave", LEAVE},
+                        {"list", LIST},
+                        {"listres", LISTRES},
+                        {"gettopic", GETTOPIC},
+                        {"settopic", SETTOPIC},
+                        {"msg", MSG},
+                        {"privmsg", PRIVMSG},
+                        {"quit", QUIT},
+                        {"help", HELP},
+                        {"status", STATUS},
+                        {"topic", TOPIC},
+                        {"nickres", NICKRES},
+                        {"channel", CHANNEL}
 	};
 	std::string name;
 	in >> name;

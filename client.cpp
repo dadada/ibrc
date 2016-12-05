@@ -337,17 +337,20 @@ void client::consume_net_input()
 bool client::process_command(std::string &command)
 {
 	std::istringstream cmd_stream(command);
-
-	msg_type cmd;
-	if (cmd_stream >> cmd) {
-		std::string par1;
-		std::string par2;
-		switch (cmd) {
+	std::string cmd;
+	std::string par1;
+	std::string par2;
+	if (cmd_stream >> cmd && cmd.front() == '/') {
+		cmd = cmd.substr(1, cmd.size());
+		std::stringstream cmdconverter (cmd);
+		msg_type mtype;
+		cmdconverter >> mtype;
+		switch (mtype) {
 			case CONNECT:
 				if (cmd_stream >> par1 >> par2) {
 					return (connect_client(par1, par2) == 0);
 				} else {
-					std::cerr << "usage: CONNECT <host> <port>" << std::endl;
+					std::cerr << "usage: /CONNECT <host> <port>" << std::endl;
 				}
 				break;
 			case DISCONNECT:
@@ -357,14 +360,14 @@ bool client::process_command(std::string &command)
 				if (cmd_stream >> par1) {
 					return (set_nick(par1) == 0);
 				} else {
-					std::cerr << "usage: NICK <new nick>" << std::endl;
+					std::cerr << "usage: /NICK <new nick>" << std::endl;
 				}
 				break;
 			case JOIN:
 				if (cmd_stream >> par1) {
 					return (join_channel(par1) == 0);
 				} else {
-					std::cerr << "usage: JOIN <channel>" << std::endl;
+					std::cerr << "usage: /JOIN <channel>" << std::endl;
 				}
 				break;
 			case LEAVE:
@@ -377,21 +380,21 @@ bool client::process_command(std::string &command)
 				if (getline(cmd_stream, par1, '\n')) {
 					return (set_topic(current_channel, par1.substr(1,par1.size())) == 0);
 				} else {
-					std::cerr << "usage: SETTOPIC <topic>" << std::endl;
+					std::cerr << "usage: /SETTOPIC <topic>" << std::endl;
 				}
 				break;
 			case MSG:
 				if (std::getline(cmd_stream, par1, '\n')) {
 					return (send_channel_message(current_channel, par1.substr(1,par1.size())) != 0);
 				} else {
-					std::cerr << "usage: MSG <message>" << std::endl;
+					std::cerr << "usage: [/MSG] <message>" << std::endl;
 				}
 				break;
 			case PRIVMSG:
 				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
 					return (send_private_message(par1, current_channel, par2.substr(1,par2.size())) != 0);
 				} else {
-					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
+					std::cerr << "usage: /PRIVMSG <recipient> <message>" << std::endl;
 				}
 				break;
 			case LIST:
@@ -412,7 +415,11 @@ bool client::process_command(std::string &command)
 				return false;
 				break;
 		}
+	} else {
+		std::getline(cmd_stream, par1, '\n');
+		return (send_channel_message(current_channel, cmd + par1) != 0);
 	}
+
 	return false;
 }
 
@@ -469,7 +476,7 @@ void client::process_message(std::string& msg)
 			switch (cmd) {
 				case MSG:
 					if (msg_stream >> par2 && std::getline(msg_stream, par3, '\n')) {
-						std::cout << "message: " << par1 << ": " << par2 << ": " << par3 << std::endl;
+						std::cout << "message: " << par1 << ": " << par2 << ": " << par3.substr(1, par3.size()) << std::endl;
 					}
 					break;
 				case PRIVMSG:
