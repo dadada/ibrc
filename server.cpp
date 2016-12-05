@@ -285,18 +285,18 @@ void server::do_join(std::istringstream &smsg, int source)
 		send_status(src, nick_not_set);
 		return;
 	}
-	if (src->get_peer()->get_channel() != nullptr) {
-		send_status(src, already_in_channel);
-		return;
-	}
+	/*if ( != nullptr) {
+	 *	send_status(src, already_in_channel);
+	 *	return;
+	 }*/
 	channel *chan = channel::get(chan_name);
 	if (chan == nullptr) { // create channel
 		if (!root) {
 			conman->add_message(parent, smsg.str());
 			return;
 		} // root
-		chan = new channel(chan_name, src->get_peer());
-		src->get_peer()->set_channel(chan);
+		chan = new channel(chan_name, src->get_peer()->get_nick());
+		chan->subscribe(src->route);
 		send_status(src, join_new_success);
 		send_channel(src, chan);
 		return;
@@ -310,7 +310,7 @@ void server::send_channel(const address *src, const channel *chan)
 {
 	std::ostringstream reply;
 	reply << "CHANNEL" << " " << src->host << " " << src->port << " " 
-		<< chan->name << " " <<  chan->op->get_nick() << " " << chan->get_topic();
+		<< chan->name << " " <<  chan->op << " " << chan->get_topic();
 	conman->add_message(src->route, reply.str());
 }
 
@@ -329,17 +329,14 @@ void server::do_leave(std::istringstream &smsg, int source)
 		send_status(src, no_such_channel);
 		return;
 	}
-	auto subs = chan->get_subscribers();
-	if (subs.find(src->route) == subs.end()) {
+	if (!chan->check_subscribed(src->route)) {
 		send_status(src, not_in_channel);
 		return;
 	}
 	chan->unsubscribe(src->route);
 	send_status(src, leave_successful);
-	if (subs.empty()) {
-		if (!root) {
-			conman->add_message(parent, smsg.str());
-		}
+	conman->add_message(parent, smsg.str());
+	if (chan->get_subscribers().empty()) {
 		delete chan;
 	}
 }
@@ -371,6 +368,7 @@ void server::do_gettopic(std::istringstream &smsg, int source)
 
 void server::do_settopic(std::istringstream &smsg, int source)
 {
+	std::string msg = smsg.str();
 	std::string host, port, chan_name, topic;
 	if (!(smsg >> host >> port >> chan_name && std::getline(smsg, topic, '\n'))) {
 		return;
@@ -387,10 +385,13 @@ void server::do_settopic(std::istringstream &smsg, int source)
 		send_status(src, no_such_channel);
 		return;
 	}
-	if (chan->op == src->get_peer()) {
+	if (chan->op == src->get_peer()->get_nick()) {
 		chan->set_topic(topic);
+		send_to_channel(chan, msg, source);
+	} else {
+		send_status(src, nick_not_authorized);
 	}
-	send_to_channel(chan, smsg.str(), source);
+
 }
 
 void server::do_msg(std::istringstream &smsg, int source)
@@ -408,7 +409,7 @@ void server::do_msg(std::istringstream &smsg, int source)
 		send_status(src, no_such_channel);
 		return;
 	}
-	if (src->get_peer()->get_channel() != chan) {
+	if (chan->check_subscribed(src->route)) {
 		send_status(src, not_in_channel);
 		return;
 	}
@@ -526,19 +527,16 @@ void server::do_channel(std::istringstream &smsg, int source)
 		topic = topic.substr(1, topic.size());
 	}
 	address *dest = address::get(host + " " + port);
-	client_data *chanop = client_data::get(op);
-	if (chanop == nullptr) {
-		return;
-	}
 	if (source == parent) {
 		channel *chan = channel::get(chan_name);
 		if (chan != nullptr) {
-			chan->op = chanop;
+			chan->op = op;
 			chan->set_topic(topic);
 		} else {
-			chan = new channel(chan_name, chanop);
+			chan = new channel(chan_name, op);
 			chan->set_topic(topic);
 		}
+		chan->subscribe(dest->route);
 	}
 	if (dest != nullptr) {
 		conman->add_message(dest->route, smsg.str());
@@ -568,6 +566,9 @@ void server::send_to_channel(channel *chan, std::string msg, int source)
 		if (s != source) {
 			conman->add_message(s, msg);
 		}
+	}
+	if (!root && source != parent) {
+		conman->add_message(parent, msg);
 	}
 }
 

@@ -50,9 +50,9 @@ class channel
 	public:
 		const std::string name;
 
-		client_data* op;
+		std::string op;
 
-		channel(const std::string channel_name, client_data* channel_op);
+		channel(const std::string channel_name, std::string channel_op);
 
 		~channel();
 
@@ -65,6 +65,8 @@ class channel
 		void subscribe(int sockfd);
 
 		void unsubscribe(int sockfd);
+
+		bool check_subscribed(int sockfd);
 
 		static channel* get(std::string);
 
@@ -156,8 +158,6 @@ class client_data
 	private:
 		std::string nick;
 
-		channel *chan;
-
 		static std::unordered_map<std::string, client_data*> nick_to_client;
 	public:
 		const address *addr;
@@ -171,10 +171,6 @@ class client_data
 		std::string get_nick() const;
 
 		bool set_nick(std::string nick_name);
-
-		channel* get_channel() const;
-
-		bool set_channel(channel *chan);
 
 		static client_data* get(std::string name);
 };

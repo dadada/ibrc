@@ -194,7 +194,8 @@ int client::set_nick(std::string new_nick)
 int client::join_channel(std::string chan_name)
 {
 	if (current_channel == chan_name) {
-		return -1;
+		std::cout << "channel: current channel is " << chan_name << std::endl;
+		return 0;
 	}
 
 	int status = send_message("JOIN", chan_name);
@@ -232,7 +233,7 @@ int client::get_topic(std::string chan_name)
 
 int client::set_topic(std::string chan_name, std::string new_channel_topic)
 {
-	if (send_message("SETTOPIC", chan_name + new_channel_topic) != 0) {
+	if (send_message("SETTOPIC", chan_name + " " + new_channel_topic) != 0) {
 		return -1;
 	}
 
@@ -241,7 +242,7 @@ int client::set_topic(std::string chan_name, std::string new_channel_topic)
 
 int client::send_channel_message(std::string channel_name, std::string message)
 {
-	if (send_message("MSG", channel_name + message) != 0) {
+	if (send_message("MSG", channel_name + " " + message) != 0) {
 		return -1;
 	}
 
@@ -374,21 +375,21 @@ bool client::process_command(std::string &command)
 				break;
 			case SETTOPIC:
 				if (getline(cmd_stream, par1, '\n')) {
-					return (set_topic(current_channel, par1) == 0);
+					return (set_topic(current_channel, par1.substr(1,par1.size())) == 0);
 				} else {
 					std::cerr << "usage: SETTOPIC <topic>" << std::endl;
 				}
 				break;
 			case MSG:
 				if (std::getline(cmd_stream, par1, '\n')) {
-					return (send_channel_message(current_channel, par1) != 0);
+					return (send_channel_message(current_channel, par1.substr(1,par1.size())) != 0);
 				} else {
 					std::cerr << "usage: MSG <message>" << std::endl;
 				}
 				break;
 			case PRIVMSG:
 				if (std::getline(cmd_stream, par1, '\n')) {
-					return (send_private_message(par1, current_channel, par1) != 0);
+					return (send_private_message(par1, current_channel, par1.substr(1,par1.size())) != 0);
 				} else {
 					std::cerr << "usage: PRIVMSG <recipient> <message>" << std::endl;
 				}
@@ -457,7 +458,7 @@ void client::process_message(std::string& msg)
 				if (msg_stream >> par1 >> par2 && std::getline(msg_stream, par3, '\n')) {
 					std::cout << "channel: you are joined to " << par1
 						<< " as" << (nick == par2 ? "OP" : "user")
-						<< ", the topic is" << par3 << std::endl;
+						<< ", the topic is" << par3.substr(1, par3.size()) << std::endl;
 					current_channel = par1;
 				}
 			default:

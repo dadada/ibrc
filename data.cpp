@@ -38,11 +38,11 @@ address* address::get(std::string name)
 	}
 }
 
-channel::channel(const std::string channel_name, client_data *channel_op)
+channel::channel(const std::string channel_name, std::string channel_op)
 	: name(channel_name), op(channel_op) 
 {
 	name_to_channel.insert({channel_name, this});
-	subscribe(op->addr->route);
+	//subscribe(op->addr->route);
 	topic = "";
 }
 
@@ -182,7 +182,6 @@ std::istream &operator>>(std::istream &in, status_code &status)
 client_data::client_data(address *a, std::string nick_name) 
 	: nick(nick_name), addr(a)
 {
-	chan = nullptr;
 	nick_to_client.insert({nick_name, this});
 }
 
@@ -198,8 +197,9 @@ bool client_data::set_nick(std::string nick_name)
 			return false;
 		}
 	}
-	nick = nick_name;
+	nick_to_client.erase(nick);
 	nick_to_client.insert({nick_name, this});
+	nick = nick_name;
 	return true;
 }
 
@@ -236,19 +236,6 @@ client_data* client_data::get(std::string name)
 	return (*data).second;
 }
 
-channel* client_data::get_channel() const
-{
-	return chan;
-}
-
-bool client_data::set_channel(channel *new_chan) {
-	if (chan == nullptr) {
-		chan = new_chan;
-		return true;
-	}
-	return false;
-}
-
 channel* channel::get(std::string name)
 {
 	auto data = name_to_channel.find(name);
@@ -256,6 +243,11 @@ channel* channel::get(std::string name)
 		return nullptr;
 	}
 	return (*data).second;
+}
+
+bool channel::check_subscribed(int sockfd)
+{
+	return (subscribers.find(sockfd) != subscribers.end());
 }
 
 void channel::unsubscribe(int sockfd)
