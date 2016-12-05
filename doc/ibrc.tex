@@ -129,7 +129,7 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
 \subsection{MSG}
 
 \begin{enumerate}
-  \item Der Client sendet MSG = (source: ADDR, channel: CHANNEL.name, msg: STRING) an seinen Server.
+  \item Der Client sendet MSG = (source: ADDR, channel: CHANNEL.name, sender: NICK, msg: STRING) an seinen Server.
   \item Kennt er den Channel nicht, sendet der Server STATUS = (dest = source, status = 403).
   \item Ist der Client nicht in diesem channel angemeldet, sendet der Server STATUS = (dest = source, status = 402).
   \item Der Server sendet MSG an channel (siehe Routing).
@@ -139,7 +139,7 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
 \subsection{PRIVMSG}
 
 \begin{enumerate}
-  \item Der Client sendet PRIVMSG = (source: ADDR, dest: NICK, channel: CHANNEL.name, msg: STRING) an dest (siehe Routing)
+  \item Der Client sendet PRIVMSG = (source: ADDR, channel: CHANNEL.name, sender: NICK, dest: NICK, msg: STRING) an dest (siehe Routing)
   \item Kennt ein Server channel nicht, antwortet er an source mit STATUS = (dest = source, status = 403).
   \item Kennt ein Server channel und erhält der die Nachricht von seinem Elternknoten und kennt kennt dest nicht, sendet er STATUS = (dest = source, status = 601) an source.
   \item Kennt ein Server channel und hat er keinen Elternknoten, kennt aber dest nicht, so antwortet er mit STATUS = (dest = source, status = 601)

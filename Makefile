@@ -19,10 +19,11 @@ CFLAGS_RELEASE = -O2 -march=native \
 prefix = $(HOME)
 bindir = $(prefix)/bin
 SRCS = client.cpp data.cpp helpers.cpp server.cpp
+HEADERS = $(patsubst %.cpp,%.hpp,$(SRCS))
 OBJS = $(patsubst %.cpp,%.o,$(SRCS))
 BIN = ibrcc ibrcd
 DOC = ibrc.pdf
-AUX = README.md LICENSE Makefile
+AUX = README.md LICENSE Makefile tests.sh doc/ibrc.tex
 
 all: debug
 
