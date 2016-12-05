@@ -40,6 +40,9 @@ install: release
 clean:
 	$(RM) $(OBJS) $(BIN) $(patsubst %.pdf,%.aux,$(DOC)) $(patsubst %.pdf,%.log,$(DOC)) $(patsubst %.pdf,%.out,$(DOC)) $(DOC)
 
+tests:
+	sh -e tests.sh 2 10 11 19
+
 ibrc.pdf: doc/ibrc.tex
 	pdflatex $^
 
@@ -52,4 +55,4 @@ ibrcd: server.o data.o helpers.o
 %.o: %.cpp $(DEPS)
 	$(CXX) -c $< $(CFLAGS)
 
-.PHONY: all clean install debug release doc
+.PHONY: all clean install debug release doc tests
