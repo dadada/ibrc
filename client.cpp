@@ -435,7 +435,7 @@ void client::process_message(std::string& msg)
 	int dest_port;
 	status_code status;
 	std::string topic;
-	std::string par1, par2, par3;
+	std::string par1, par2, par3, par4;
 	if (msg_stream >> cmd >> dest_host >> dest_port) {
 		if (dest_host == hostname && dest_port == port) {
 			switch (cmd) {
@@ -480,8 +480,10 @@ void client::process_message(std::string& msg)
 					}
 					break;
 				case PRIVMSG:
-					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par3, '\n')) {
-						std::cout << "private message: " << par1 << ": " << par2 << ": " << par3.substr(1,par3.size()) << std::endl;
+					if (msg_stream >> par1 >> par2 >> par3 >> par4 && std::getline(msg_stream, par4, '\n')) {
+						if (par1 == current_channel && par3 == nick) {
+							std::cout << par2 << ": " << par3.substr(1,par4.size()) << std::endl;
+						}
 					}
 					break;
 				default:
