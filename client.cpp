@@ -250,7 +250,8 @@ int client::send_private_message(std::string recipient, std::string channel, std
 int client::quit()
 {
 	quit_bit = true;
-	return leave_channel(current_channel) == 0 ? 0 : -1;
+	send_message("QUIT", "");
+	return 0;
 }
 
 int client::run()

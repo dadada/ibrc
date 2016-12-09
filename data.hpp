@@ -21,6 +21,7 @@ class peer
 
 		static std::unordered_map<std::string, peer*> nick_to_peer;
 
+		static std::unordered_map<int, std::set<peer*>> socket_to_peers;
 	public:
 		const int route;
 
@@ -37,6 +38,8 @@ class peer
 		channel* get_channel() const;
 
 		static peer* get(std::string nick_name);
+
+		static void close_route(int sock);
 
 };
 

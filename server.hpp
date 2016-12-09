@@ -23,8 +23,6 @@ class server
 
 		connection_manager *conman;
 
-		std::unordered_map<int, std::set<peer*>> socket_to_peers;
-
 		void process_message(std::string message, int source);
 
 		void do_connect(std::istringstream &smsg, int source);
@@ -57,6 +55,8 @@ class server
 
 		void do_channel(std::istringstream &smsg, int source);
 
+		void do_quit(std::istringstream &smsg, int source);
+
 		void send_status(const peer *dest, status_code code);
 
 		void send_channel(const peer *scr, const channel *chan);
@@ -75,8 +75,6 @@ class server
 		bool run();
 
 		bool connect_parent(std::string host, std::string port);
-
-		std::set<peer*> get_peers(int sock);
 };
 
 class server_exception : public std::exception

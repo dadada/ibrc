@@ -6,10 +6,15 @@ std::unordered_map<std::string, peer*> peer::nick_to_peer;
 std::unordered_map<std::string, channel*> channel::name_to_channel;
 
 
+std::unordered_map<int, std::set<peer*>> peer::socket_to_peers;
+
+
 peer::peer(const int r, std::string name)
 	: nick(name), route(r)
 {
 	nick_to_peer[name] = this;
+	auto sockpeers = socket_to_peers[r];
+	sockpeers.insert(this);
 	chan = nullptr;
 }
 
@@ -19,6 +24,28 @@ peer::~peer()
 	if (found != nick_to_peer.end()) {
 		nick_to_peer.erase(found);
 	}
+
+	auto peers_in_route = socket_to_peers[route];
+
+	peers_in_route.erase(this);
+
+	if (peers_in_route.empty()) {
+		close_route(route);
+	}
+}
+
+void peer::close_route(int sock)
+{
+	auto peers_in_route = socket_to_peers[sock];
+
+	for (peer *p : peers_in_route) {
+		if (p->chan != nullptr) {
+			p->chan->unsubscribe(sock);
+		}
+		delete p;
+	}
+
+	socket_to_peers.erase(sock);
 }
 
 peer* peer::get(std::string name)

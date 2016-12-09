@@ -184,6 +184,9 @@ void server::process_message(std::string msg, int source)
 			case CHANNEL:
 				do_channel(smsg, source);
 				break;
+			case QUIT:
+				do_quit(smsg, source);
+				break;
 			default:
 				// do_nothing
 				break;
@@ -218,8 +221,6 @@ void server::do_nick(std::istringstream &smsg, int source)
 				}
 			}
 			from = new peer(source, next_nick);
-			auto peers = socket_to_peers[source];
-			peers.insert(from);
 		} else { // try to modify existing
 			if (from->route != source) {
 				std::stringstream stat;
@@ -428,11 +429,11 @@ void server::do_status(std::istringstream &smsg, int source)
 	peer *dest = peer::get(dest_nick);
 	if (dest != nullptr) {
 		conman->add_message(dest->route, smsg.str());
-		if (dest != nullptr && status == nick_not_unique) {
+		/*if (dest != nullptr && status == nick_not_unique) {
 			auto peers = socket_to_peers[dest->route];
 			peers.erase(dest);
 			delete dest;
-		}
+		}*/
 	}
 }
 
@@ -527,17 +528,29 @@ const char* server_exception::what() const throw()
 	return "server: failed to create a server";
 }
 
-std::set<peer*> server::get_peers(int sock)
-{
-	return socket_to_peers[sock];
-}
-
 void server::close_route(int sock)
 {
-	auto peers_in_route = socket_to_peers[sock];
-	for (peer *p : peers_in_route) {
-		delete p;
-	}
-	socket_to_peers.erase(sock);
+	peer::close_route(sock);
+
 	conman->remove_socket(sock);
+}
+
+void server::do_quit(std::istringstream &smsg, int source)
+{
+	std::string nick;
+	if (!(smsg >> nick)) {
+		return;
+	}
+
+	peer *src = peer::get(nick);
+
+	if (src == nullptr || src->route != source) {
+		return;
+	}
+
+	if (!root) {
+		conman->add_message(parent, smsg.str());
+	}
+
+	delete src;
 }
