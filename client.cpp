@@ -351,27 +351,41 @@ bool client::process_command(std::string &command)
 				}
 				break;
 			case LEAVE:
-				return (leave_channel(current_channel) == 0);
+				if (current_channel == "") {
+					std::cerr << "can only be used, when in channel." << std::endl;
+				} else {
+					return (leave_channel(current_channel) == 0);
+				}
 				break;
 			case GETTOPIC:
-				return (get_topic(current_channel) == 0);
+				if (current_channel == "") {
+					std::cerr << "can only be used, when in channel." << std::endl;
+				} else {
+					return (get_topic(current_channel) == 0);
+				}
 				break;
 			case SETTOPIC:
-				if (getline(cmd_stream, par1, '\n')) {
+				if (current_channel == "") {
+					std::cerr << "can only be used, when in channel." << std::endl;
+				} else if (getline(cmd_stream, par1, '\n')) {
 					return (set_topic(current_channel, par1.substr(1,par1.size())) == 0);
 				} else {
 					std::cerr << "usage: /SETTOPIC <topic>" << std::endl;
 				}
 				break;
 			case MSG:
-				if (std::getline(cmd_stream, par1, '\n')) {
+				if (current_channel == "") {
+					std::cerr << "can only be used, when in channel." << std::endl;
+				} else if (std::getline(cmd_stream, par1, '\n')) {
 					return (send_channel_message(current_channel, par1.substr(1,par1.size())) != 0);
 				} else {
 					std::cerr << "usage: [/MSG] <message>" << std::endl;
 				}
 				break;
 			case PRIVMSG:
-				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
+				if (current_channel == "") {
+					std::cerr << "can only be used, when in channel." << std::endl;
+				} else if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
 					return (send_private_message(par1, current_channel, par2.substr(1,par2.size())) != 0);
 				} else {
 					std::cerr << "usage: /PRIVMSG <recipient> <message>" << std::endl;
