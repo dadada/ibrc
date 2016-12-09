@@ -17,39 +17,37 @@ peer::peer(const int r, std::string name)
 	: nick(name), route(r)
 {
 	nick_to_peer[name] = this;
-	auto sockpeers = socket_to_peers[r];
+	auto &sockpeers = socket_to_peers[r];
 	sockpeers.insert(this);
 	chan = nullptr;
 }
 
 peer::~peer()
 {
-	auto found = nick_to_peer.find(nick);
-	if (found != nick_to_peer.end()) {
-		nick_to_peer.erase(found);
-	}
+	nick_to_peer.erase(nick);
 
 	auto peers_in_route = socket_to_peers[route];
 
 	peers_in_route.erase(this);
 
-	if (peers_in_route.empty()) {
-		close_route(route);
-	}
-}
-
-void peer::close_route(int sock)
-{
-	auto peers_in_route = socket_to_peers[sock];
-
-	for (peer *p : peers_in_route) {
-		if (p->chan != nullptr) {
-			p->chan->unsubscribe(sock);
+	bool channel_done = true;
+	for (auto p : peers_in_route) {
+		if (p->chan == chan) {
+			channel_done = false;
 		}
-		delete p;
+	}
+	if (channel_done) {
+		if (chan != nullptr) {
+			chan->unsubscribe(route);
+			if (chan->get_subscribers().empty()) {
+				delete chan;
+			}
+		}
 	}
 
-	socket_to_peers.erase(sock);
+	if (peers_in_route.empty()) {
+		socket_to_peers.erase(route);
+	}
 }
 
 peer* peer::get(std::string name)

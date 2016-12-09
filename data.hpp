@@ -40,9 +40,6 @@ class peer
 		static peer* get(std::string nick_name);
 
 		static std::set<peer*> get_peers(int sock);
-
-		static void close_route(int sock);
-
 };
 
 std::ostream& operator <<(std::ostream& outs, const peer &a);

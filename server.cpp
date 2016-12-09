@@ -104,7 +104,7 @@ bool server::run()
 
 		struct epoll_event ev;
 		while (conman->next_event(ev)) {
-			if (ev.events & EPOLLRDHUP) { // remote peer closed connection
+			if (ev.events & EPOLLRDHUP || ev.events == EPOLLERR || ev.events == EPOLLHUP) { // remote peer closed connection
 				close_route(ev.data.fd);
 				if (parent == ev.data.fd) { // become new root
 					root = true;
@@ -310,6 +310,9 @@ void server::do_leave(std::istringstream &smsg, int source)
 		send_status(src, not_in_channel);
 	} else {
 		chan->unsubscribe(src->route);
+		if (chan->get_subscribers().empty()) {
+			delete chan;
+		}
 		src->set_channel(nullptr); // leaves channel
 
 		if (root) {
@@ -384,8 +387,11 @@ void server::do_msg(std::istringstream &smsg, int source)
 	}
 	channel *chan = channel::get(chan_name);
 	peer *src = peer::get(sender);
-	if (chan == nullptr && src != nullptr) {
-		send_status(src, no_such_channel);
+	if (chan == nullptr) {
+		if (src != nullptr) {
+			send_status(src, no_such_channel);
+		}
+		return;
 	} else if (src != nullptr && src->get_channel()->name != chan_name) {
 		send_status(src, not_in_channel);
 	} else if (root && src != nullptr) {
@@ -530,14 +536,17 @@ const char* server_exception::what() const throw()
 
 void server::close_route(int sock)
 {
+	auto peers = peer::get_peers(sock);
+
 	if (!root) {
-		auto peers = peer::get_peers(sock);
 		for (auto p : peers) {
 			conman->add_message(parent, "QUIT " + p->get_nick());
 		}
 	}
 
-	peer::close_route(sock);
+	for (auto p : peers) {
+		delete p;
+	}
 
 	conman->remove_socket(sock);
 }

@@ -390,7 +390,7 @@ bool client::process_command(std::string &command)
 				if (current_channel == "") {
 					std::cerr << "can only be used, when in channel." << std::endl;
 				} else if (std::getline(cmd_stream, par1, '\n')) {
-					return (send_channel_message(current_channel, par1.substr(1,par1.size())) != 0);
+					return (send_channel_message(current_channel, par1.substr(1,par1.size())) == 0);
 				} else {
 					std::cerr << "usage: [/MSG] <message>" << std::endl;
 				}
@@ -399,7 +399,7 @@ bool client::process_command(std::string &command)
 				if (current_channel == "") {
 					std::cerr << "can only be used, when in channel." << std::endl;
 				} else if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
-					return (send_private_message(par1, current_channel, par2.substr(1,par2.size())) != 0);
+					return (send_private_message(par1, current_channel, par2.substr(1,par2.size())) == 0);
 				} else {
 					std::cerr << "usage: /PRIVMSG <recipient> <message>" << std::endl;
 				}
@@ -423,8 +423,10 @@ bool client::process_command(std::string &command)
 				break;
 		}
 	} else {
-		std::getline(cmd_stream, par1, '\n');
-		return (send_channel_message(current_channel, cmd + par1) != 0);
+		if (current_channel != "") {
+			std::getline(cmd_stream, par1, '\n');
+			return (send_channel_message(current_channel, cmd + par1) == 0);
+		}
 	}
 
 	return false;
