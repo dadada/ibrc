@@ -11,6 +11,7 @@
 #include <cstring>
 
 #define BUFLEN 2056 // max size of message
+#define EPOLLFLAGS EPOLLIN | EPOLLET | EPOLLRDHUP
 
 int set_socket_non_blocking(int sockfd)
 {
@@ -126,10 +127,10 @@ bool connection_manager::next_event(struct epoll_event &ev)
 {
 	if (next_event_pos < MAX_EVENTS) {
 		ev = events[next_event_pos];
-		if (ev.events & EPOLLERR || ev.events & EPOLLHUP) {
-			remove_socket(ev.data.fd);
-		}
 		next_event_pos++;
+		if (socks.find(ev.data.fd) == socks.end()) {
+			return false;
+		}
 		return true;
 	}
 	return false;
@@ -183,7 +184,7 @@ int connection_manager::add_accepting(std::string port)
 
 	struct epoll_event ev;
 
-	ev.events = EPOLLIN | EPOLLET;
+	ev.events = EPOLLFLAGS;
 	ev.data.fd = listen_s;
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_s, &ev) != 0) {
@@ -217,7 +218,7 @@ int connection_manager::accept_client(int sock)
 
 	struct epoll_event ev;
 
-	ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+	ev.events = EPOLLFLAGS | EPOLLOUT;
 	ev.data.fd = conn_s;
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_s, &ev) == -1) {
@@ -233,10 +234,13 @@ int connection_manager::accept_client(int sock)
 
 bool connection_manager::remove_socket(int sock)
 {
-//	in_queues.erase(sock);
+	in_queues.erase(sock);
 	out_queues.erase(sock);
 	socks.erase(sock);
-	if (close(sock) == -1) {
+	if (epoll_ctl(epollfd, EPOLL_CTL_DEL, sock, nullptr) != 0) {
+		perror("epoll_ctl: mod sockfd failed.");
+		return false;
+	} else if (close(sock) == -1) {
 		perror("close");
 		return false;
 	}
@@ -245,12 +249,12 @@ bool connection_manager::remove_socket(int sock)
 
 bool connection_manager::pause_write(int sock)
 {
-	return epoll_mod(sock, EPOLLIN | EPOLLET);
+	return epoll_mod(sock, EPOLLFLAGS);
 }
 
 bool connection_manager::continue_write(int sock)
 {
-	return epoll_mod(sock, EPOLLOUT | EPOLLIN | EPOLLET);
+	return epoll_mod(sock, EPOLLFLAGS | EPOLLOUT);
 }
 
 bool connection_manager::epoll_mod(int sock, uint32_t event_flags)
@@ -260,7 +264,7 @@ bool connection_manager::epoll_mod(int sock, uint32_t event_flags)
 	ev.events = event_flags;
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) != 0) {
-		perror("epoll_ctr: mod sockfd failed.");
+		perror("epoll_ctl: mod sockfd failed.");
 		return false;
 	}
 	return true;
@@ -290,7 +294,7 @@ bool connection_manager::receive_messages(int sock)
 	if (count == 0) {
 		remove_socket(sock);
 	}
-	return count == 0 ? false : true;
+	return count != 0;
 }
 
 bool connection_manager::send_messages(int sock)
@@ -351,7 +355,7 @@ int connection_manager::create_connection(std::string host, std::string port)
 
 	struct epoll_event ev;
 
-	ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
+	ev.events = EPOLLFLAGS;
 	ev.data.fd = sock;
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sock, &ev) != 0) {

@@ -5,6 +5,7 @@
 #include "helpers.hpp"
 #include <string>
 #include <queue>
+#include <set>
 
 int main(int argc, char* argv[]);
 
@@ -21,6 +22,8 @@ class server
 		int parent;
 
 		connection_manager *conman;
+
+		std::unordered_map<int, std::set<peer*>> socket_to_peers;
 
 		void process_message(std::string message, int source);
 
@@ -54,11 +57,13 @@ class server
 
 		void do_channel(std::istringstream &smsg, int source);
 
-		void send_status(const address *dest, status_code code);
+		void send_status(const peer *dest, status_code code);
 
-		void send_channel(const address *scr, const channel *chan);
+		void send_channel(const peer *scr, const channel *chan);
 
 		void send_to_channel(channel *chan, std::string msg, int source);
+
+		void close_route(int sock);
 
 	public:
 		/* creates a new server */
@@ -70,6 +75,8 @@ class server
 		bool run();
 
 		bool connect_parent(std::string host, std::string port);
+
+		std::set<peer*> get_peers(int sock);
 };
 
 class server_exception : public std::exception

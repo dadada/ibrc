@@ -8,36 +8,47 @@
 #include <unordered_map>
 #include <set>
 
-#define DEFAULT_SERVER_PORT "5001"
+#define DEFAULT_PORT "5001"
 
-class client_data;
+class channel;
 
-class address
+class peer
 {
 	private:
-		/* host + " " + port */
-		static std::unordered_map<std::string, address*> host_port_to_addr;
+		std::string nick;
 
-		client_data *peer;
+		channel *chan;
+
+		/* host + " " + port */
+		static std::unordered_map<std::string, peer*> addr_to_peer;
+
+		static std::unordered_map<std::string, peer*> nick_to_peer;
+
 	public:
 		const std::string host;
 		const std::string port;
 		const int route;
 
-
-		address(const std::string hostname, const std::string portnum, 
+		peer(const std::string hostname, const std::string portnum, 
 				int route_to_next_hop);
 
-		~address();
+		~peer();
 
-		client_data* get_peer() const;
+		std::string get_nick() const;
 
-		static address* get(std::string);
+		bool set_nick(std::string nick_name);
+
+		void set_channel(channel *chan);
+
+		channel* get_channel() const;
+
+		static peer* get(std::string host, std::string port);
+
+		static peer* get(std::string nick_name);
+
 };
 
-std::ostream& operator <<(std::ostream& outs, const address &a);
-
-class client_data;
+std::ostream& operator <<(std::ostream& outs, const peer &a);
 
 class channel
 {
@@ -49,10 +60,9 @@ class channel
 		static std::unordered_map<std::string, channel*> name_to_channel;
 	public:
 		const std::string name;
+		const peer *op;
 
-		std::string op;
-
-		channel(const std::string channel_name, std::string channel_op);
+		channel(const std::string channel_name, const peer *channel_op);
 
 		~channel();
 
@@ -72,8 +82,6 @@ class channel
 
 		static std::vector<std::string> get_channel_list();
 };
-
-
 
 enum status_code
 {
@@ -153,28 +161,5 @@ std::ostream &operator<<(std::ostream &out, const msg_type &cmd);
 
 std::istream &operator>>(std::istream &in, msg_type &cmd);
 
-class client_data
-{
-	private:
-		std::string nick;
-
-		static std::unordered_map<std::string, client_data*> nick_to_client;
-	public:
-		const address *addr;
-
-		client_data(address *a, std::string n);
-
-		~client_data();
-
-		address get_addr() const;
-
-		std::string get_nick() const;
-
-		bool set_nick(std::string nick_name);
-
-		static client_data* get(std::string name);
-};
-
-client_data* get_client_data(std::string host, std::string port);
 
 #endif /* DATA_HPP */

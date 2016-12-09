@@ -1,5 +1,6 @@
 #include "client.hpp"
 #include "helpers.hpp"
+#include "data.hpp"
 #include <iostream>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -15,7 +16,7 @@
 
 int main(int argc, char* argv[])
 {
-	std::string port = DEFAULT_SERVER_PORT;
+	std::string port = DEFAULT_PORT;
 	std::string host;
 	if (argc < 2) {
 		std::cerr << "ibrcc: too few arguments provided" << USAGE << std::endl;
@@ -195,15 +196,10 @@ int client::join_channel(std::string chan_name)
 {
 	if (current_channel == chan_name) {
 		std::cout << "channel: current channel is " << chan_name << std::endl;
-		return 0;
 	} else if (current_channel == "") {
-		int status = send_message("JOIN", chan_name);
-		if (status != 0) {
-			return -1;
-		}
+		send_message("JOIN", chan_name);
 	}
-	std::cout << "channel: already in channel " << chan_name << std::endl;
-	return -1;
+	return 0;
 }
 
 int client::leave_channel(std::string chan_name)
@@ -458,7 +454,7 @@ void client::process_message(std::string& msg)
 					break;
 				case TOPIC:
 					if (msg_stream >> par1 && std::getline(msg_stream, par2, '\n')) {
-						std::cout << "topic for " << par1 << "is " << par2 << std::endl;
+						std::cout << "topic for " << par1 << " is " << par2 << std::endl;
 					}
 					break;
 
@@ -475,12 +471,12 @@ void client::process_message(std::string& msg)
 		} else if (msg_stream >> par1 && par1 == current_channel) {
 			switch (cmd) {
 				case MSG:
-					if (msg_stream >> par2 && std::getline(msg_stream, par3, '\n')) {
-						std::cout << "message: " << par1 << ": " << par2 << ": " << par3.substr(1, par3.size()) << std::endl;
+					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n')) {
+						std::cout << par3 << ": " << par3.substr(1, par3.size()) << std::endl;
 					}
 					break;
 				case PRIVMSG:
-					if (msg_stream >> par1 >> par2 >> par3 >> par4 && std::getline(msg_stream, par4, '\n')) {
+					if (msg_stream >> par1 >> par2 >> par3 && std::getline(msg_stream, par4, '\n')) {
 						if (par1 == current_channel && par3 == nick) {
 							std::cout << par2 << ": " << par3.substr(1,par4.size()) << std::endl;
 						}
