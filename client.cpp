@@ -11,11 +11,17 @@
 #include <stdio.h>
 #include <sstream>
 #include <sys/epoll.h>
+#include <signal.h>
 
 #define USAGE "usage: ibrcc <hostname> <port>"
 
 int main(int argc, char* argv[])
 {
+	struct sigaction action;
+	memset(&action, 0, sizeof(struct sigaction));
+	action.sa_handler = client::cleanup;
+	sigaction(SIGTERM, &action, NULL);
+
 	std::string port = DEFAULT_PORT;
 	std::string host;
 	if (argc < 2) {
@@ -30,18 +36,25 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	client *c = new client();
+	the_client = new client();
 
-	if (c->connect_client(host, port) == 0) {
-		if (!(c->run())) {
+	if (the_client->connect_client(host, port) == 0) {
+		if (!(the_client->run())) {
 			std::cerr << "oopsi" << std::endl;
 		}
 	} else {
 		std::cerr << "Failed to connect." << std::endl;
 	}
 
-	delete c;
+	delete the_client;
 	exit(EXIT_SUCCESS);
+}
+
+void client::cleanup(int signum)
+{
+	if (the_client != nullptr) {
+		the_client->quit();
+	}
 }
 
 client::client()

@@ -96,7 +96,11 @@ class client
 
 		/* processes a message received from the network */
 		void process_message(std::string &msg);
+
+		static void cleanup(int signum);
 };
+
+client *the_client;
 
 class client_exception: public std::exception
 {

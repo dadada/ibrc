@@ -530,6 +530,13 @@ const char* server_exception::what() const throw()
 
 void server::close_route(int sock)
 {
+	if (!root) {
+		auto peers = peer::get_peers(sock);
+		for (auto p : peers) {
+			conman->add_message(parent, "QUIT " + p->get_nick());
+		}
+	}
+
 	peer::close_route(sock);
 
 	conman->remove_socket(sock);

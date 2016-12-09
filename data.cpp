@@ -8,6 +8,10 @@ std::unordered_map<std::string, channel*> channel::name_to_channel;
 
 std::unordered_map<int, std::set<peer*>> peer::socket_to_peers;
 
+std::set<peer*> peer::get_peers(int sock)
+{
+	return socket_to_peers[sock];
+}
 
 peer::peer(const int r, std::string name)
 	: nick(name), route(r)
