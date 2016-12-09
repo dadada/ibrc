@@ -26,39 +26,10 @@ Die Pakete sehen so aus:
 \end{lstlisting}
 wobei die Felder jeweils durch Leerzeichen getrennt sind und name der Name des Paketes ist.
 
-\subsection{CONNECT}
-
-\begin{enumerate}
-  \item Der Client sendet an einen Server CONNECT = (source: ADDR).
-  \item
-    \begin{enumerate}
-      \item Der Server legt einen neuen Eintrag in seiner CLIENTLIST mit den Daten aus CONNECT an. 
-        Als hop wählt er den letzen Absender des CONNECT. Das Feld CLIENT.nick bleibt zunächst leer.
-      \item Falls ein Fehler auftritt sende STATUS = (dest = source, status = 101) an den Client und brich ab.
-      \item Falls kein Fehler auftritt und ein Elternknoten erreichbar ist, sende CONNECT weiter an den Elternknoten.
-    \end{enumerate}
-  \item Der Wurzelknoten sendet STATUS = (dest = source, status = 100) an den Client.
-\end{enumerate}
-
-\subsection{DISCONNECT}
-
-\begin{enumerate}
-  \item Der Client sendet DISCONNECT = (source: ADDR).
-  \item Der Server prüft source auf Richtigkeit. Falls Fehlerhaft, Nachricht verwerfen.
-  \item
-  \begin{enumerate}
-    \item Der Server löscht den Client aus seiner CLIENTLIST.
-    \item Falls ein Fehler auftritt sende STATUS = (dest = source, status = 201) an den Client und breche ab.
-    \item Ansonsten schicke DISCONNECT an den Elternknoten, falls dieser existiert.
-  \end{enumerate}
-  \item Der Wurzelknoten sendet STATUS = (dest = source, status = 200) an den Client.
-\end{enumerate}
-DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client geschlossen wird.
-
 \subsection{NICK}
 
 \begin{enumerate}
-  \item Der Client sendet an den Server NICK = (source: ADDR, nick: NICK).
+  \item Der Client sendet an den Server NICK = (source: NICK, nick: NICK).
   \item
     \begin{enumerate}
       \item Falls source nicht in der CLIENTLIST dem absendenden Teilbaum zugeordnet ist, sende STATUS = (dest = source, status = 301) an den Client und brich ab.
@@ -66,13 +37,12 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
       \item Falls der Wurzelknoten erreicht wurde, und kein Fehler aufgetreten ist, sende STATUS = (dest = source, status = 300) an den Client und NICKRES = (dest = source, nick = nick).
     \end{enumerate}
   \item Wiederhole den vorherigen Punkt. 
-  \item Empfängt ein Server NICKRES, dann übernimmt er den Nick aus NICKRES in seine CLIENTLIST, falls ein Eintrag für dest existiert.
 \end{enumerate}
 
 \subsection{JOIN}
 
 \begin{enumerate}
-  \item Der Client sendet JOIN = (source: ADDR, channel: CHANNEL.name) an den Server.
+  \item Der Client sendet JOIN = (source: NICK, channel: CHANNEL.name) an den Server.
   \item Falls der Client keinen Nick hat (hat noch kein NICK gesendet), sendet der Server STATUS mit Fehlercoe 303 an den Client.
   \item Falls der Client bereits einen CHANNEL hat, sendet der Server STATUS = (dest = source, status = 404) und bricht ab. 
   \item
@@ -89,11 +59,11 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
 \subsection{LEAVE}
 
 \begin{enumerate}
-  \item Der Client sendet LEAVE = (source: ADDR, channel: CHANNEL.name) an den Server.
+  \item Der Client sendet LEAVE = (source: NICK, channel: CHANNEL.name) an den Server.
   \item
     \begin{enumerate}
       \item Der Server prüft, ob der Absender in channel ist. Falls nicht sendet er STATUS = (dest = source, STATUS = 402) an den letzen Absender.
-      \item Der Server löscht die ADDR des letzen Absenders aus der CHANNELLIST für channel und sendet STATUS = (dest = source, status = 405) an den letzen Absender.
+      \item Der Server löscht die NICK des letzen Absenders aus der CHANNELLIST für channel.
       \item Falls die Liste für channel keine Einträge mehr enthält, wird der Eintrag gelöscht und falls zudem ein Elternknoten existiert, sende ein LEAVE an den Elternknoten. Wiederholen.
     \end{enumerate}
   \item Falls kein weiterer Elternknoten mehr existiert, brich ab.
@@ -102,15 +72,15 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
 \subsection{LIST}
 
 \begin{enumerate}
-  \item Der Client sendet LIST = (source: ADDR) an den Server.
-  \item Die Server leiten LIST an ihre Wurzel. 
+  \item Der Client sendet LIST = (source: NICK) an den Server.
+  \item Die Server leiten LIST an ihre Wurzel.
   \item Der Server, welcher alle Kanäle kennt (Wurzel), antwortet mit LISTRES = (dest = source, channels = [CHANNEL,\ldots]).
 \end{enumerate}
 
 \subsection{GETTOPIC}
 
 \begin{enumerate}
-  \item Der Client sendet GETTOPIC = (source: ADDR, channel: CHANNEL.name) an den Server.
+  \item Der Client sendet GETTOPIC = (source: NICK, channel: CHANNEL.name) an den Server.
   \item Der erste Server, der den channel kennt, antwortet mit TOPIC = (dest = source, channelname: CHANNEL.name, topic: CHANNEL.topic).
   \item Falls kein Server channel kennt, antwortet die Wurzel mit STATUS = (dest = source, status = 403).
 \end{enumerate}
@@ -118,7 +88,7 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
 \subsection{SETTOPIC}
 
 \begin{enumerate}
-  \item Der Client sendet SETTOPIC = (source: ADDR, channel: CHANNEL.name, topic: CHANNEL.topic) an seinen Server.
+  \item Der Client sendet SETTOPIC = (source: NICK, channel: CHANNEL.name, topic: CHANNEL.topic) an seinen Server.
   \item
     \begin{enumerate}
       \item Ist CHANNEL.op nicht gleich source, dann sendet der Server STATUS = (dest = source, status = 502) an den Client.
@@ -129,38 +99,34 @@ DISCONNECT wird vom Server automatisch gesendet, wenn die Verbindung zum Client 
 \subsection{MSG}
 
 \begin{enumerate}
-  \item Der Client sendet MSG = (source: ADDR, channel: CHANNEL.name, sender: NICK, msg: STRING) an seinen Server.
-  \item Kennt er den Channel nicht, sendet der Server STATUS = (dest = source, status = 403).
+  \item Der Client sendet MSG = (source: NICK, channel: CHANNEL.name, msg: STRING) an seinen Server.
+  \item Kennt er den Channel nicht, sendet der Server STATUS = (source, status = 403).
   \item Ist der Client nicht in diesem channel angemeldet, sendet der Server STATUS = (dest = source, status = 402).
   \item Der Server sendet MSG an channel (siehe Routing).
-  \item Der Server sendet bei Erfolg (sofort) STATUS = (dest = source, status = 600) an den Client.
+  \item Der Server sendet bei Erfolg (sofort) STATUS = (source, status = 600) an den Client.
 \end{enumerate}
 
 \subsection{PRIVMSG}
 
 \begin{enumerate}
-  \item Der Client sendet PRIVMSG = (source: ADDR, channel: CHANNEL.name, sender: NICK, dest: NICK, msg: STRING) an dest (siehe Routing)
-  \item Kennt ein Server channel nicht, antwortet er an source mit STATUS = (dest = source, status = 403).
-  \item Kennt ein Server channel und erhält der die Nachricht von seinem Elternknoten und kennt kennt dest nicht, sendet er STATUS = (dest = source, status = 601) an source.
-  \item Kennt ein Server channel und hat er keinen Elternknoten, kennt aber dest nicht, so antwortet er mit STATUS = (dest = source, status = 601)
-  \item Kennt ein Server sowohl channel, als auch dest, aber wiedersprechen sich die ADDR zu beiden, sendet der Server STATUS = (dest = source, status = 603).
-  \item Wurde die Nachricht erfolgreich zugestellt quittiert der Empfänger (Client) die Nachricht mit STATUS = (dest = source, status = 604)
+  \item Der Client sendet PRIVMSG = (source: NICK, channel: CHANNEL.name, dest: NICK, msg: STRING) an dest (siehe Routing)
+  \item Kennt ein Server channel nicht, antwortet er an source mit STATUS = (source, status = 403).
+  \item Kennt ein Server channel und erhält der die Nachricht von seinem Elternknoten und kennt kennt dest nicht, sendet er STATUS = (source, status = 601) an source.
+  \item Kennt ein Server channel und hat er keinen Elternknoten, kennt aber dest nicht, so antwortet er mit STATUS = (source, status = 601)
+  \item Kennt ein Server sowohl channel, als auch dest, aber wiedersprechen sich die NICK zu beiden, sendet der Server STATUS = (source, status = 603).
+  \item Wurde die Nachricht erfolgreich zugestellt quittiert der Empfänger (Client) die Nachricht mit STATUS = (source, status = 604)
 \end{enumerate}
 
 \subsection{QUIT}
 
 \begin{enumerate}
-  \item LEAVE
-  \item DISCONNECT
+  \item Der Client sendet QUIT an seinen Server. 
+  \item Dieser löscht den Client aus allen Kanälen 
+  \item und sendet QUIT an seinen Elternknoten weiter.
 \end{enumerate}
 
 
 \section{Datenstrukturen}
-
-\subsection{ADDR}
-
-ADDR = (hostname: STRING, port: STRING)\\
-Feste Adresse. Hier genügt uns der volle DNS hostname des Servers / Clients in Kombination mit dem Port, über den die Verbindung inniiert wurde.
 
 \subsection{NICK}
 
@@ -169,13 +135,8 @@ Der Nick kann beliebig gewechselt werden, muss aber im Netzwerk einzigartig sein
 
 \subsection{CLIENT}
 
-CLIENT = (addr: ADDR, nick: NICK)\\
-Jeder CLIENT wird über seinen Nick und seine ADDR identifiziert. 
-
-\subsection{SERVER}
-
-SERVER = (addr: ADDR)\\
-Jeder Server wird über eine ADDR identifiziert.
+CLIENT = (nick: NICK, route: int)\\
+Jeder CLIENT wird über seinen Nick und seine NICK identifiziert. Die route ist die Route zum nächsten Hop auf dem Weg zum Ziel.
 
 \subsection{CHANNEL}
 
@@ -184,13 +145,13 @@ name wird nach dem ersten JOIN nicht mehr geändert (siehe JOIN). topic wird dur
 
 \subsection{CLIENTLIST}
 
-CLIENTLIST = [(CLIENT, ADDR), \ldots]
-Speichert die Routinginformationen für die Clients. Die ADDR ist hierbei die ADDR des nächsten bekannten hops auf dem Pfad zum Client. Hierbei hat jeder Server nur Einträge für Clients in seinen Kindern. Die ADDR ist eindeutig, weil ein Client nur in einem Teilbaum sein kann. Kommen Clients hinzu (CONNECT) oder verlassen (DISCONNECT) sie das Netz wird die Liste aktualisiert.
+CLIENTLIST = [(NICK, CLIENT), \ldots]
+Speichert die Routinginformationen für die Clients. Die NICK ist hierbei die NICK des nächsten bekannten hops auf dem Pfad zum Client. Hierbei hat jeder Server nur Einträge für Clients in seinen Kindern. Die NICK ist eindeutig, weil ein Client nur in einem Teilbaum sein kann. Kommen Clients hinzu (CONNECT) oder verlassen (DISCONNECT) sie das Netz wird die Liste aktualisiert.
 
 \subsection{CHANNELLIST}
 
-CHANNELLIST = [(CHANNEL, [ADDR, \ldots]), \ldots]
-Speichert die Routinginformationen für die Kanäle. Hierbei hat jeder Server nur Einträge für Kanäle in denen Clients seiner Kinder sind. Zu jedem Kanal ist eine Liste von ADDR gespeichert, weil in mehreren Teilbäumen Clients in dem Kanal existieren können. Die ADDR sind die ADDR der nächsten hops, die den Kanal kennen, also Nachrichten an den Kanal erhalten müssen. Die Liste wird bei JOIN und LEAVE aktualisiert.
+CHANNELLIST = [(CHANNEL, [route, \ldots]), \ldots]
+Speichert die Routinginformationen für die Kanäle. Hierbei hat jeder Server nur Einträge für Kanäle in denen Clients seiner Kinder sind. Zu jedem Kanal ist eine Liste von NICK gespeichert, weil in mehreren Teilbäumen Clients in dem Kanal existieren können. Die route sind die Routen der nächsten hops, die den Kanal kennen, also Nachrichten an den Kanal erhalten müssen. Die Liste wird bei JOIN und LEAVE aktualisiert.
 
 
 \section{Verbindungen}
@@ -203,8 +164,9 @@ Speichert die Routinginformationen für die Kanäle. Hierbei hat jeder Server nu
 C   C  C   C
 \end{lstlisting}
 
-Server verbinden sich zu je genau einem Elternknoten (anderer Server). Über die gesamte Lebensdauer des Netzes bleibt diese Verbindung bestehen. Geht sie verloren, wird sie wieder aufgebaut.
-Jeder Client ist genau zu einem Server verbunden. Clients können dynamisch Verbindungen zu Servern abbauen und aufbauen (Siehe CONNECT, DISCONNECT)
+Server verbinden sich zu je genau einem Elternknoten (anderer Server). Über die gesamte Lebensdauer des Netzes bleibt diese Verbindung bestehen.
+Jeder Client ist genau zu einem Server verbunden.
+Clients können dynamisch Verbindungen zu Servern abbauen und aufbauen (Siehe NICK, DISCONNECT)
 
 
 \section{Routing}
@@ -229,7 +191,7 @@ Private Nachrichten sind an den NICK eines Clients in einem CHANNEL addressiert.
 C  C  S-C
 \end{lstlisting}
 
-Kanalnachrichten werden mit dem CHANNEL.name addressiert. Solche Nachrichten werden an den Elternknoten und alle Einträge in der ADDR-Liste zum Kanal weitergeleitet. Ausgenommen von der Weiterleitung ist jedesmal die ADDR, von der die Nachricht unmittelbar erhalten wurde.
+Kanalnachrichten werden mit dem CHANNEL.name addressiert. Solche Nachrichten werden an den Elternknoten und alle Einträge in der NICK-Liste zum Kanal weitergeleitet. Ausgenommen von der Weiterleitung ist jedesmal der NICK, von der die Nachricht unmittelbar erhalten wurde.
 
 
 \section{Fehlerbehandlung}
