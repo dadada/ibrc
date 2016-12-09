@@ -1,26 +1,23 @@
 #include "data.hpp"
 #include <unordered_map>
 
-std::unordered_map<std::string, peer*> peer::addr_to_peer;
-
 std::unordered_map<std::string, peer*> peer::nick_to_peer;
 
 std::unordered_map<std::string, channel*> channel::name_to_channel;
 
 
-peer::peer(const std::string hostname, const std::string portnum, const int r)
-	: host(hostname), port(portnum), route(r)
+peer::peer(const int r, std::string name)
+	: nick(name), route(r)
 {
-	addr_to_peer.insert({hostname + " " + port, this});
-	nick = "";
+	nick_to_peer[name] = this;
 	chan = nullptr;
 }
 
 peer::~peer()
 {
-	auto found = addr_to_peer.find(host + " " + port);
-	if (found != addr_to_peer.end()) {
-		addr_to_peer.erase(found);
+	auto found = nick_to_peer.find(nick);
+	if (found != nick_to_peer.end()) {
+		nick_to_peer.erase(found);
 	}
 }
 
@@ -207,9 +204,9 @@ bool peer::set_nick(std::string nick_name)
 			return false;
 		}
 	}
-	nick_to_peer.erase(nick);
 	nick = nick_name;
-	nick_to_peer.insert({nick_name, this});
+	// TODO delete old nick here? would allow reusing nicks
+	nick_to_peer[nick_name] = this;
 	return true;
 }
 
@@ -219,15 +216,6 @@ channel::~channel()
 	if (found != name_to_channel.end()) {
 		name_to_channel.erase(found);
 	}
-}
-
-peer* peer::get(std::string host, std::string port)
-{
-	auto found = addr_to_peer.find(host + " " + port);
-	if (found == addr_to_peer.end()) {
-		return nullptr;
-	}
-	return (*found).second;
 }
 
 bool channel::check_subscribed(int sockfd)

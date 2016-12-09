@@ -19,18 +19,12 @@ class peer
 
 		channel *chan;
 
-		/* host + " " + port */
-		static std::unordered_map<std::string, peer*> addr_to_peer;
-
 		static std::unordered_map<std::string, peer*> nick_to_peer;
 
 	public:
-		const std::string host;
-		const std::string port;
 		const int route;
 
-		peer(const std::string hostname, const std::string portnum, 
-				int route_to_next_hop);
+		peer(const int route_to_next_hop, std::string name);
 
 		~peer();
 
@@ -41,8 +35,6 @@ class peer
 		void set_channel(channel *chan);
 
 		channel* get_channel() const;
-
-		static peer* get(std::string host, std::string port);
 
 		static peer* get(std::string nick_name);
 

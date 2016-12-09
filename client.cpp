@@ -140,10 +140,6 @@ int client::connect_client(std::string host, std::string server_port)
 		return -1;
 	}
 	
-	if (send_message("CONNECT", "") != 0) {
-		return -1;
-	}
-
 	return 0;
 }
 
@@ -155,7 +151,7 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 
 	std::stringstream msg;
 
-	msg << msg_name << " " << hostname << " " << port << " " << msg_payload << std::endl;
+	msg << msg_name << " " << nick << " " << msg_payload << std::endl;
 
 	const std::string msg_str = msg.str();
 	net_output.push(msg_str);
@@ -173,21 +169,15 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 	return 0;
 }
 
-int client::disconnect()
-{
-	if (send_message("DISCONNECT", "") != 0) {
-		return -1;
-	}
-	return 0;
-}
-
 int client::set_nick(std::string new_nick)
 {
-	if (send_message("NICK", new_nick) != 0) {
-		return -1;
-	} else {
+	if (nick == "") {
 		nick = new_nick;
 	}
+	if (send_message("NICK", new_nick) != 0) {
+		return -1;
+	}
+	nick = new_nick;
 
 	return 0;
 }
@@ -204,7 +194,10 @@ int client::join_channel(std::string chan_name)
 
 int client::leave_channel(std::string chan_name)
 {
-	if (current_channel != "" && send_message("LEAVE", chan_name) != 0) {
+	if (current_channel == "") {
+		std::cerr << "must be joined to channel, to leave channel" << std::endl;
+	}
+	else if (send_message("LEAVE", chan_name) != 0) {
 		return -1;
 	} else {
 		current_channel = "";
@@ -238,7 +231,7 @@ int client::set_topic(std::string chan_name, std::string new_channel_topic)
 
 int client::send_channel_message(std::string channel_name, std::string message)
 {
-	if (send_message("MSG", channel_name + " " + nick + " " + message) != 0) {
+	if (send_message("MSG", channel_name + " " + message) != 0) {
 		return -1;
 	}
 
@@ -247,7 +240,7 @@ int client::send_channel_message(std::string channel_name, std::string message)
 
 int client::send_private_message(std::string recipient, std::string channel, std::string message)
 {
-	if (send_message("PRIVMSG", channel + " " + nick + " " + recipient + " " + message) != 0) {
+	if (send_message("PRIVMSG", channel + " " + recipient + " " + message) != 0) {
 		return -1;
 	}
 
@@ -257,7 +250,7 @@ int client::send_private_message(std::string recipient, std::string channel, std
 int client::quit()
 {
 	quit_bit = true;
-	return leave_channel(current_channel) == 0 && disconnect() == 0 ? 0 : -1;
+	return leave_channel(current_channel) == 0 ? 0 : -1;
 }
 
 int client::run()
@@ -342,16 +335,6 @@ bool client::process_command(std::string &command)
 		msg_type mtype;
 		cmdconverter >> mtype;
 		switch (mtype) {
-			case CONNECT:
-				if (cmd_stream >> par1 >> par2) {
-					return (connect_client(par1, par2) == 0);
-				} else {
-					std::cerr << "usage: /CONNECT <host> <port>" << std::endl;
-				}
-				break;
-			case DISCONNECT:
-				return (disconnect() == 0);
-				break;
 			case NICK:
 				if (cmd_stream >> par1) {
 					return (set_nick(par1) == 0);
@@ -419,7 +402,6 @@ bool client::process_command(std::string &command)
 	return false;
 }
 
-
 void client::process_message(std::string& msg)
 {
 	// TODO remove
@@ -427,61 +409,56 @@ void client::process_message(std::string& msg)
 	//
 	std::istringstream msg_stream(msg);
 	msg_type cmd;
-	std::string dest_host;
-	int dest_port;
-	status_code status;
-	std::string topic;
 	std::string par1, par2, par3, par4;
-	if (msg_stream >> cmd >> dest_host >> dest_port) {
-		if (dest_host == hostname && dest_port == port) {
+	status_code status;
+	if (msg_stream >> cmd >> par1) {
+		if (nick == par1) {
 			switch (cmd) {
 				case STATUS:
 					if (msg_stream >> status) {
 						std::cout << "status: " << status << std::endl;
-					}
-					break;
-				case NICKRES:
-					if (msg_stream >> nick) {
-						std::cout << "nick: you are now known as " << nick << std::endl;
+						if (status == nick_not_unique || status == nick_not_authorized) {
+							nick = "";
+						}
 					}
 					break;
 				case LISTRES:
 					std::cout << "listres: ";
-					while (msg_stream >> nick) {
-						std::cout << nick << ", ";
+					while (msg_stream >> par2) {
+						std::cout << par2 << ", ";
 					}
 					std::cout << std::endl;
 					break;
 				case TOPIC:
-					if (msg_stream >> par1 && std::getline(msg_stream, par2, '\n')) {
-						std::cout << "topic for " << par1 << " is " << par2 << std::endl;
+					if (msg_stream >> par2 && std::getline(msg_stream, par3, '\n')) {
+						std::cout << "topic for " << par2 << " is " << par3 << std::endl;
 					}
 					break;
 
 				case CHANNEL:
-					if (msg_stream >> par1 >> par2 && std::getline(msg_stream, par3, '\n')) {
-						std::cout << "channel: you are joined to " << par1
-							<< " as " << (nick == par2 ? "OP" : "user")
-							<< ", the topic is " << par3.substr(1, par3.size()) << std::endl;
-						current_channel = par1;
+					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n')) {
+						std::cout << "channel: you are joined to " << par2
+							<< " as " << (nick == par3 ? "OP" : "user")
+							<< ", the topic is " << par4.substr(1, par4.size()) << std::endl;
+						current_channel = par2;
 					}
 				default:
 					break;
-			}
-		} else if (msg_stream >> par1 && par1 == current_channel) {
+				}
+		} else {
 			switch (cmd) {
-				case MSG:
-					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n')) {
-						std::cout << par3 << ": " << par3.substr(1, par3.size()) << std::endl;
-					}
-					break;
 				case PRIVMSG:
-					if (msg_stream >> par1 >> par2 >> par3 && std::getline(msg_stream, par4, '\n')) {
-						if (par1 == current_channel && par3 == nick) {
-							std::cout << par2 << ": " << par3.substr(1,par4.size()) << std::endl;
-						}
+					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n') && par2 == current_channel && par3 == nick) {
+						std::cout << par1 << " whispers: " << par4.substr(1,par4.size()) << std::endl;
 					}
 					break;
+				case MSG:
+					if (msg_stream >> par2 && std::getline(msg_stream, par3, '\n') 
+							&& par2 == current_channel) {
+						std::cout << par1 << ": " << par3.substr(1, par3.size()) << std::endl;
+					}
+					break;
+
 				default:
 					break;
 			}
@@ -491,7 +468,7 @@ void client::process_message(std::string& msg)
 
 int client::send_list()
 {
-	if (send_message("LIST", "") != 0) {
+	if (nick != "" && send_message("LIST", "") != 0) {
 		return -1;
 	}
 	return 0;
