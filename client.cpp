@@ -109,7 +109,7 @@ int client::connect_client(std::string host, std::string server_port)
 	struct sockaddr_storage addr;
 
 	if (getsockname(sockfd, (struct sockaddr*)&addr, &len) != 0) {
-		perror("getpeername");
+		perror("getsockname");
 		return -1;
 	}
 	
