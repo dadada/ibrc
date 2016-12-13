@@ -317,7 +317,12 @@ void server::do_join(std::istringstream &smsg, int source)
 		channel *known_channel = channel::get(chan);
 
 		if (known_peer != nullptr) {
-			if (known_channel != nullptr) {
+			if (known_peer->get_nick() == "") {
+				send_status(known_peer, nick_not_set);
+			} else if (channel::is_in_channel(known_peer)) {
+				send_status(known_peer, already_in_channel);
+			}
+			else if (known_channel != nullptr) {
 				known_channel->join(known_peer);
 				send_channel(known_peer, known_channel);
 			} else {

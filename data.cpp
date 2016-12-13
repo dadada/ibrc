@@ -49,7 +49,7 @@ peer* peer::get_by_host(std::string name)
 channel::channel(const std::string channel_name, peer *channel_op)
 	: name(channel_name), op(channel_op->host)
 {
-	name_to_channel.insert({channel_name, this});
+	name_to_channel[channel_name] = this;
 	join(channel_op);
 	topic = "";
 }
@@ -285,7 +285,13 @@ std::vector<channel*> channel::channel_list()
 
 channel::channel(std::string topic_string, const std::string channel_name, const std::string channel_op)
 	: topic(topic_string), name(channel_name), op(channel_op)
-{}
+{
+	name_to_channel[channel_name] = this;
+	peer *op_peer = peer::get_by_host(channel_op);
+	if (op_peer != nullptr) {
+		join(op_peer);
+	}
+}
 
 channel * channel::get(std::string chan_name)
 {
@@ -313,4 +319,16 @@ std::set<peer*> peer::get_peers(int sock)
 		}
 	}
 	return peers;
+}
+
+bool channel::is_in_channel(peer *p)
+{
+	for (auto c : name_to_channel) {
+		for (auto a : c.second->members) {
+			if (a == p) {
+				return true;
+			}
+		}
+	}
+	return false;
 }

@@ -79,6 +79,8 @@ class channel
 
 		bool check_subscribed(int sockfd);
 
+		static bool is_in_channel(peer *p);
+
 		static channel* get(std::string);
 
 		static std::vector<channel*> channel_list();
