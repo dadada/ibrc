@@ -152,6 +152,8 @@ int client::connect_client(std::string host, std::string server_port)
 		perror("epoll_ctr: add sockfd failed.");
 		return -1;
 	}
+
+	send_message("CONNECT", "");
 	
 	return 0;
 }
@@ -164,7 +166,7 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 
 	std::stringstream msg;
 
-	msg << msg_name << " " << nick << " " << msg_payload << std::endl;
+	msg << msg_name << " " << hostname << " " << msg_payload << std::endl;
 
 	const std::string msg_str = msg.str();
 	net_output.push(msg_str);
@@ -244,7 +246,7 @@ int client::set_topic(std::string chan_name, std::string new_channel_topic)
 
 int client::send_channel_message(std::string channel_name, std::string message)
 {
-	if (send_message("MSG", channel_name + " " + message) != 0) {
+	if (send_message("MSG", nick + " " + channel_name + " " + message) != 0) {
 		return -1;
 	}
 
@@ -253,7 +255,7 @@ int client::send_channel_message(std::string channel_name, std::string message)
 
 int client::send_private_message(std::string recipient, std::string channel, std::string message)
 {
-	if (send_message("PRIVMSG", channel + " " + recipient + " " + message) != 0) {
+	if (send_message("PRIVMSG", nick + " " + channel + " " + recipient + " " + message) != 0) {
 		return -1;
 	}
 
@@ -442,14 +444,14 @@ void client::process_message(std::string& msg)
 	std::string par1, par2, par3, par4;
 	status_code status;
 	if (msg_stream >> cmd >> par1) {
-		if (nick == par1) {
+		if (hostname == par1) {
 			switch (cmd) {
+				case NICKRES:
+					msg_stream >> nick;
+					break;
 				case STATUS:
 					if (msg_stream >> status) {
 						std::cout << "status: " << status << std::endl;
-						if (status == nick_not_unique || status == nick_not_authorized) {
-							nick = "";
-						}
 					}
 					break;
 				case LISTRES:
@@ -468,7 +470,7 @@ void client::process_message(std::string& msg)
 				case CHANNEL:
 					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n')) {
 						std::cout << "channel: you are joined to " << par2
-							<< " as " << (nick == par3 ? "OP" : "user")
+							<< " as " << (hostname == par3 ? "OP" : "user")
 							<< ", the topic is " << par4.substr(1, par4.size()) << std::endl;
 						current_channel = par2;
 					}
@@ -476,16 +478,17 @@ void client::process_message(std::string& msg)
 					break;
 				}
 		} else {
+			std::string par5;
 			switch (cmd) {
 				case PRIVMSG:
-					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n') && par2 == current_channel && par3 == nick) {
-						std::cout << par1 << " whispers: " << par4.substr(1,par4.size()) << std::endl;
+					if (msg_stream >> par2 >> par3 >> par4 && std::getline(msg_stream, par5, '\n') && par3 == current_channel && par4 == nick) {
+						std::cout << par2 << " whispers: " << par5.substr(1,par5.size()) << std::endl;
 					}
 					break;
 				case MSG:
-					if (msg_stream >> par2 && std::getline(msg_stream, par3, '\n') 
-							&& par2 == current_channel) {
-						std::cout << par1 << ": " << par3.substr(1, par3.size()) << std::endl;
+					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n') 
+							&& par3 == current_channel) {
+						std::cout << par1 << ": " << par4.substr(1, par4.size()) << std::endl;
 					}
 					break;
 

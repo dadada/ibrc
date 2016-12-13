@@ -10,22 +10,21 @@
 
 #define DEFAULT_PORT "5001"
 
-class channel;
-
 class peer
 {
 	private:
 		std::string nick;
 
-		channel *chan;
-
 		static std::unordered_map<std::string, peer*> nick_to_peer;
 
-		static std::unordered_map<int, std::set<peer*>> socket_to_peers;
+		static std::unordered_map<std::string, peer*> host_to_peer;
+
 	public:
 		const int route;
 
-		peer(const int route_to_next_hop, std::string name);
+		const std::string host;
+
+		peer(const int route_to_next_hop, std::string hostname);
 
 		~peer();
 
@@ -33,11 +32,9 @@ class peer
 
 		bool set_nick(std::string nick_name);
 
-		void set_channel(channel *chan);
-
-		channel* get_channel() const;
-
 		static peer* get(std::string nick_name);
+
+		static peer* get_by_host(std::string host);
 
 		static std::set<peer*> get_peers(int sock);
 };
@@ -49,14 +46,18 @@ class channel
 	private:
 		std::string topic;
 
-		std::set<int> subscribers = {};
+		std::set<int> routes = {};
+
+		std::set<peer*> members = {};
 
 		static std::unordered_map<std::string, channel*> name_to_channel;
 	public:
 		const std::string name;
-		const peer *op;
+		const std::string op; // host of op
 
-		channel(const std::string channel_name, const peer *channel_op);
+		channel(const std::string channel_name, peer *channel_op);
+
+		channel(const std::string channel_name, const std::string channel_op, std::string topic);
 
 		~channel();
 
@@ -64,7 +65,13 @@ class channel
 
 		void set_topic(std::string topic);
 
-		std::set<int> get_subscribers() const;
+		std::set<int> get_routes() const;
+
+		void join(peer *p);
+
+		void leave(const peer *p);
+
+		bool in_channel(peer *p);
 
 		void subscribe(int sockfd);
 
@@ -74,7 +81,7 @@ class channel
 
 		static channel* get(std::string);
 
-		static std::vector<std::string> get_channel_list();
+		static std::vector<channel*> channel_list();
 };
 
 enum status_code
@@ -129,6 +136,7 @@ enum msg_type
 	CHANNEL,
 	TOPIC,
 	NICKRES,
+	DELCHANNEL,
 };
 
 static std::vector<std::string> command_names = {
@@ -149,6 +157,7 @@ static std::vector<std::string> command_names = {
 		"TOPIC",
 		"NICKRES",
 		"CHANNEL",
+		"DELCHANNEL",
 		};
 
 std::ostream &operator<<(std::ostream &out, const msg_type &cmd);

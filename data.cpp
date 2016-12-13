@@ -3,50 +3,26 @@
 
 std::unordered_map<std::string, peer*> peer::nick_to_peer;
 
+std::unordered_map<std::string, peer*> peer::host_to_peer;
+
 std::unordered_map<std::string, channel*> channel::name_to_channel;
 
-
-std::unordered_map<int, std::set<peer*>> peer::socket_to_peers;
-
-std::set<peer*> peer::get_peers(int sock)
-{
-	return socket_to_peers[sock];
-}
-
 peer::peer(const int r, std::string name)
-	: nick(name), route(r)
+	: route(r), host(name)
 {
-	nick_to_peer[name] = this;
-	auto &sockpeers = socket_to_peers[r];
-	sockpeers.insert(this);
-	chan = nullptr;
+	host_to_peer[name] = this;
 }
 
 peer::~peer()
 {
 	nick_to_peer.erase(nick);
 
-	auto peers_in_route = socket_to_peers[route];
+	host_to_peer.erase(host);
 
-	peers_in_route.erase(this);
-
-	bool channel_done = true;
-	for (auto p : peers_in_route) {
-		if (p->chan == chan) {
-			channel_done = false;
+	for (auto chan : channel::channel_list()) {
+		if (chan->in_channel(this)) {
+			chan->leave(this);
 		}
-	}
-	if (channel_done) {
-		if (chan != nullptr) {
-			chan->unsubscribe(route);
-			if (chan->get_subscribers().empty()) {
-				delete chan;
-			}
-		}
-	}
-
-	if (peers_in_route.empty()) {
-		socket_to_peers.erase(route);
 	}
 }
 
@@ -60,11 +36,44 @@ peer* peer::get(std::string name)
 	}
 }
 
-channel::channel(const std::string channel_name, const peer *channel_op)
-	: name(channel_name), op(channel_op)
+peer* peer::get_by_host(std::string name)
+{
+	auto found = host_to_peer.find(name);
+	if (found != host_to_peer.end()) {
+		return (*found).second;
+	} else {
+		return nullptr;
+	}
+}
+
+channel::channel(const std::string channel_name, peer *channel_op)
+	: name(channel_name), op(channel_op->host)
 {
 	name_to_channel.insert({channel_name, this});
+	join(channel_op);
 	topic = "";
+}
+
+void channel::join(peer *member)
+{
+	members.insert(member);
+	routes.insert(member->route);
+}
+
+void channel::leave(const peer *p)
+{
+	bool route_done = true;
+
+	for (auto m : members) {
+		if (m->route == p->route) {
+			route_done = false;
+			break;
+		}
+	}
+	
+	if (route_done) {
+		routes.erase(p->route);
+	}
 }
 
 std::string channel::get_topic() const
@@ -77,14 +86,14 @@ void channel::set_topic(std::string topic_text)
 	topic = topic_text;
 }
 
-std::set<int> channel::get_subscribers() const
+std::set<int> channel::get_routes() const
 {
-	return subscribers;
+	return routes;
 }
 
 void channel::subscribe(int peersock)
 {
-	subscribers.insert(peersock);
+	routes.insert(peersock);
 }
 
 const char* receive_error::what() const throw()
@@ -116,6 +125,7 @@ std::istream &operator>>(std::istream &in, msg_type &cmd) {
                         {"TOPIC", TOPIC},
                         {"NICKRES", NICKRES},
                         {"CHANNEL", CHANNEL},
+                        {"DELCHANNEL", DELCHANNEL},
 			{"connect", CONNECT},
 			{"disconnect", DISCONNECT},
                         {"nick", NICK},
@@ -233,9 +243,14 @@ bool peer::set_nick(std::string nick_name)
 			return false;
 		}
 	}
-	nick = nick_name;
-	// TODO delete old nick here? would allow reusing nicks
+
+	auto found = nick_to_peer.find(nick);
+	if (found != nick_to_peer.end()) {
+		nick_to_peer.erase(found);
+	}
+
 	nick_to_peer[nick_name] = this;
+	nick = nick_name;
 	return true;
 }
 
@@ -249,34 +264,28 @@ channel::~channel()
 
 bool channel::check_subscribed(int sockfd)
 {
-	return (subscribers.find(sockfd) != subscribers.end());
+	return (routes.find(sockfd) != routes.end());
 }
 
 void channel::unsubscribe(int sockfd)
 {
-	subscribers.erase(sockfd);
+	routes.erase(sockfd);
 }
 
-std::vector<std::string> channel::get_channel_list()
+std::vector<channel*> channel::channel_list()
 {
-	std::vector<std::string> chan_names;
+	std::vector<channel*> chan_names;
 
 	for (auto c : name_to_channel) {
-		chan_names.push_back(c.first);
+		chan_names.push_back(c.second);
 	}
 
 	return chan_names;
 }
 
-void peer::set_channel(channel *c)
-{
-	chan = c;
-}
-
-channel* peer::get_channel() const
-{
-	return chan;
-}
+channel::channel(std::string topic_string, const std::string channel_name, const std::string channel_op)
+	: topic(topic_string), name(channel_name), op(channel_op)
+{}
 
 channel * channel::get(std::string chan_name)
 {
@@ -286,4 +295,22 @@ channel * channel::get(std::string chan_name)
 	} else {
 		return nullptr;
 	}
+}
+
+bool channel::in_channel(peer *p)
+{
+	auto found = members.find(p);
+
+	return found != members.end();
+}
+
+std::set<peer*> peer::get_peers(int sock)
+{
+	std::set<peer*> peers;
+	for (auto a : host_to_peer) {
+		if (a.second->route == sock) {
+			peers.insert(a.second);
+		}
+	}
+	return peers;
 }

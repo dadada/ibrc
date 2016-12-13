@@ -25,6 +25,13 @@ class server
 
 		void process_message(std::string message, int source);
 
+		bool test_nick(std::string nick);
+
+		void send_nick_res(peer *dest, std::string &nick);
+
+
+		void send_topic(channel *chan, peer *dest);
+
 		void do_connect(std::istringstream &smsg, int source);
 
 		void do_disconnect(std::istringstream &smsg, int source);
@@ -57,11 +64,17 @@ class server
 
 		void do_quit(std::istringstream &smsg, int source);
 
+		void do_delchannel(std::istringstream &smsg, int source);
+
 		void send_status(const peer *dest, status_code code);
 
 		void send_channel(const peer *scr, const channel *chan);
 
 		void send_to_channel(channel *chan, std::string msg, int source);
+
+		void send_channel_list(peer *dest);
+
+		void send_delete_channel(channel *chan, int source);
 
 		void close_route(int sock);
 
