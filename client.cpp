@@ -205,15 +205,9 @@ int client::join_channel(std::string chan_name)
 
 int client::leave_channel(std::string chan_name)
 {
-	if (current_channel == "") {
-		std::cerr << "must be joined to channel, to leave channel" << std::endl;
-	}
-	else if (send_message("LEAVE", chan_name) != 0) {
+	if (send_message("LEAVE", chan_name) != 0) {
 		return -1;
-	} else {
-		current_channel = "";
 	}
-
 	return 0;
 }
 
