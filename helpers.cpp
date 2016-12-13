@@ -189,7 +189,7 @@ int connection_manager::add_accepting(std::string port)
 
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_s, &ev) != 0) {
 		remove_socket(listen_s);
-		perror("epoll_ctl: mod sockfd failed.");
+		perror("epoll_ctl: add sockfd failed.");
 		return -1;
 	}
 
