@@ -447,22 +447,21 @@ void server::do_msg(std::istringstream &smsg, int source)
 	if (smsg >> sender >> nick >> chan_name) {
 		channel *chan = channel::get(chan_name);
 		peer *src = peer::get_by_host(sender);
+
 		if (chan == nullptr) {
 			if (src != nullptr) {
 				send_status(src, no_such_channel);
 			}
-		} else if (src != nullptr && !chan->in_channel(src)) {
-			send_status(src, not_in_channel);
-		} else {
+		} else { // knows the channel
 			if (src != nullptr) {
-				if (sender != src->host) {
-					send_status(src, nick_not_authorized);
-				} else {
+				if (src->route == source) { // validate source
+					send_to_channel(chan, smsg.str(), source);
 					if (root) {
 						send_status(src, msg_delivered);
 					}
-					send_to_channel(chan, smsg.str(), source);
 				}
+			} else if (source == parent) {
+				send_to_channel(chan, smsg.str(), source);
 			}
 		}
 	}
