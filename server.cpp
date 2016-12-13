@@ -318,7 +318,9 @@ void server::do_join(std::istringstream &smsg, int source)
 			}
 			else if (known_channel != nullptr) { // knows the channel
 				known_channel->join(known_peer);
-				conman->add_message(parent, smsg.str());
+				if (!root) {
+					conman->add_message(parent, smsg.str());
+				}
 			} else {
 				if (root) {
 					known_channel = new channel(chan, known_peer);
