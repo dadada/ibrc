@@ -193,11 +193,17 @@ void server::do_delchannel(std::istringstream &smsg, int source)
 	if (smsg >> chan_name) {
 		channel *chan = channel::get(chan_name);
 		if (chan != nullptr) {
-			delete chan;
+			peer *op = peer::get_by_host(chan->op);
+
 			if (root) {
-				peer *op = peer::get_by_host(chan->op);
-				send_status(op, leave_successful);
+				if (op != nullptr) {
+					send_status(op, leave_successful);
+				}
 			}
+
+			send_to_channel(chan, smsg.str(), source);
+
+			delete chan;
 		}
 	}
 }
