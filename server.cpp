@@ -326,7 +326,7 @@ void server::do_join(std::istringstream &smsg, int source)
 			} else if (channel::is_in_channel(known_peer)) {
 				send_status(known_peer, already_in_channel);
 			}
-			else if (known_channel != nullptr) {
+			else if (known_channel != nullptr) { // knows the channel
 				known_channel->join(known_peer);
 				send_channel(known_peer, known_channel);
 			} else {
@@ -561,6 +561,7 @@ void server::do_channel(std::istringstream &smsg, int source)
 			} else {
 				chan = new channel(topic, chan_name, op);
 			}
+			chan->join(dest);
 			conman->add_message(dest->route, smsg.str());
 		}
 	}
