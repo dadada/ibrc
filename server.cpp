@@ -72,6 +72,7 @@ server::server(std::string port)
 	conman = new connection_manager();
 	accepting = conman->add_accepting(port);
 	if (accepting == -1) {
+
 		delete conman;
 		throw server_exception();
 	}
@@ -368,12 +369,13 @@ void server::do_leave(std::istringstream &smsg, int source)
 
 				if (chan->op == src->host) {
 					send_delete_channel(chan, source);
-					if (root) {
-						send_status(src, leave_successful);
-					}
 					delete chan;
 				} else if (!root) {
 					conman->add_message(parent, smsg.str());
+				}
+
+				if (root) {
+					send_status(src, leave_successful);
 				}
 			}
 		}
