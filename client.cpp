@@ -105,8 +105,8 @@ int client::connect_client(std::string host, std::string server_port)
 	gethostname(hostn, 1023);
 	hostname = std::string(hostn);
 
-	socklen_t len;
 	struct sockaddr_storage addr;
+	socklen_t len = sizeof (addr);
 
 	if (getsockname(sockfd, (struct sockaddr*)&addr, &len) != 0) {
 		perror("getsockname");
