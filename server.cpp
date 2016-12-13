@@ -235,8 +235,11 @@ void server::do_connect(std::istringstream &smsg, int source)
 
 	if (smsg >> host && source != parent) {
 		peer *npeer = new peer(source, host);
-		conman->add_message(parent, smsg.str());
-		send_status(npeer, connect_success);
+		if (!root) {
+			conman->add_message(parent, smsg.str());
+		} else {
+			send_status(npeer, connect_success);
+		}
 	}
 }
 
