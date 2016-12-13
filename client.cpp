@@ -199,11 +199,7 @@ int client::set_nick(std::string new_nick)
 
 int client::join_channel(std::string chan_name)
 {
-	if (current_channel == chan_name) {
-		std::cout << "channel: current channel is " << chan_name << std::endl;
-	} else if (current_channel == "") {
-		send_message("JOIN", chan_name);
-	}
+	send_message("JOIN", chan_name);
 	return 0;
 }
 

@@ -451,7 +451,7 @@ void server::do_msg(std::istringstream &smsg, int source)
 			if (src != nullptr) {
 				send_status(src, no_such_channel);
 			}
-		} else if (src != nullptr && chan->in_channel(src)) {
+		} else if (src != nullptr && !chan->in_channel(src)) {
 			send_status(src, not_in_channel);
 		} else {
 			if (src != nullptr) {
