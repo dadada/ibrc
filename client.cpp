@@ -13,7 +13,7 @@
 #include <sys/epoll.h>
 #include <signal.h>
 
-#define USAGE "usage: ibrcc <hostname> <port>"
+#define USAGE "usage: ibrcc <hostname>"
 
 int main(int argc, char* argv[])
 {
@@ -27,13 +27,11 @@ int main(int argc, char* argv[])
 	if (argc < 2) {
 		std::cerr << "ibrcc: too few arguments provided" << USAGE << std::endl;
 		exit(EXIT_FAILURE);
-	} else if (argc > 3) {
+	} else if (argc > 2) {
 		std::cerr << "ibrcc: excess arguments" << std::endl << USAGE << std::endl;
+		exit(EXIT_FAILURE);
 	} else {
 		host = argv[1];
-		if (argc > 2) {
-			port = argv[2];
-		}
 	}
 
 	the_client = new client();

@@ -13,45 +13,25 @@
 
 int main(int argc, char* argv[])
 {
-	std::string usage = "usage: ibrcd [-p <listen_port>] [-h <peer_host>] [-k <peer_port>]";
+	std::string usage = "usage: ibrcd <peer_host>";
 	std::string peer_port = DEFAULT_PORT;
 	std::string peer_host;
 	std::string listen_port = DEFAULT_PORT;
 
-	int opt = 0;
 	bool wants_connect = false;
 
-	while ((opt = getopt(argc, argv, "p:h:k:")) != -1) {
-		switch (opt) {
-			case 'p':
-				listen_port = optarg;
-				break;
-			case 'h':
-				wants_connect = true;
-				peer_host = optarg;
-				break;
-			case 'k':
-				wants_connect = true;
-				peer_port = optarg;
-				break;
-			default:
-				std::cerr << usage << std::endl;
-				exit(EXIT_FAILURE);
-				break;
-		}
+	if (argc > 1) {
+		peer_host = argv[1];
+		wants_connect = true;
 	}
 
 	try {
 		server s = server(listen_port);
 
 		if (wants_connect) {
-			if (peer_host != "") {
-				if (!s.connect_parent(peer_host, peer_port)) {
-					std::cerr << "failed to connect" << std::endl;
-					exit(EXIT_FAILURE);
-				}
-			} else {
-				std::cerr << "usage: -k makes -h mandatory" << std::endl; 
+			if (!s.connect_parent(peer_host, peer_port)) {
+				std::cerr << "failed to connect" << std::endl;
+				exit(EXIT_FAILURE);
 			}
 		}
 
