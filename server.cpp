@@ -381,7 +381,7 @@ void server::do_leave(std::istringstream &smsg, int source)
 void server::send_delete_channel(channel *chan, int source)
 {
 	std::ostringstream del_msg;
-	del_msg << "DELCHANNEL" << " " << chan->name;
+	del_msg << "DELCHANNEL" << " " << chan->name << std::endl;
 	send_to_channel(chan, del_msg.str(), source);
 }
 
