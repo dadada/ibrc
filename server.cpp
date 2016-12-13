@@ -213,6 +213,10 @@ void server::do_delchannel(std::istringstream &smsg, int source)
 		channel *chan = channel::get(chan_name);
 		if (chan != nullptr) {
 			delete chan;
+			if (root) {
+				peer *op = peer::get_by_host(chan->op);
+				send_status(op, leave_successful);
+			}
 		}
 	}
 }
@@ -364,12 +368,11 @@ void server::do_leave(std::istringstream &smsg, int source)
 
 				if (chan->op == src->host) {
 					send_delete_channel(chan, source);
+					if (root) {
+						send_status(src, leave_successful);
+					}
 					delete chan;
-				}
-
-				if (root) {
-					send_status(src, leave_successful);
-				} else {
+				} else if (!root) {
 					conman->add_message(parent, smsg.str());
 				}
 			}
