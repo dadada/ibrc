@@ -354,13 +354,26 @@ bool client::process_command(std::string &command)
 				}
 				break;
 			case LEAVE:
-				return (leave_channel(current_channel) == 0);
+				if (current_channel == "") {
+					std::cerr << "must be joined to channel";
+					return false;
+				} else {
+					return (leave_channel(current_channel) == 0);
+				}
 				break;
 			case GETTOPIC:
-				return (get_topic(current_channel) == 0);
+				if (current_channel == "") {
+					std::cerr << "must be joined to channel";
+					return false;
+				} else {
+					return (get_topic(current_channel) == 0);
+				}
 				break;
 			case SETTOPIC:
-				if (getline(cmd_stream, par1, '\n')) {
+				if (current_channel == "") {
+					std::cerr << "must be joined to channel";
+					return false;
+				} else if (getline(cmd_stream, par1, '\n')) {
 					return (set_topic(current_channel, par1.substr(1,par1.size())) == 0);
 				} else {
 					std::cerr << "usage: /SETTOPIC <topic>" << std::endl;
