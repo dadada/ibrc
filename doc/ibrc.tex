@@ -220,17 +220,17 @@ Der Nick kann beliebig gewechselt werden, muss aber im Netzwerk einzigartig sein
 
 \subsection{CLIENT}
 
-CLIENT = (nick: NICK, route: int)\\
+CLIENT = (host: STRING, nick: NICK, route: int)\\
 Jeder CLIENT wird über seinen Nick und seine NICK identifiziert. Die route ist die Route zum nächsten Hop auf dem Weg zum Ziel.
 
 \subsection{CHANNEL}
 
-CHANNEL = (name: STRING, topic: STRING, op: NICK)\\
+CHANNEL = (name: STRING, topic: STRING, op: STRING)\\
 name wird nach dem ersten JOIN nicht mehr geändert (siehe JOIN). topic wird durch SETTOPIC geändert. TOPIC und CHANNEL aktualisieren die Daten im Netz, wenn Änderungen auftreten.
 
 \subsection{CLIENTLIST}
 
-CLIENTLIST = [(NICK, CLIENT), \ldots]
+CLIENTLIST = [(HOST, CLIENT), \ldots]
 Speichert die Routinginformationen für die Clients. Die NICK ist hierbei die NICK des nächsten bekannten hops auf dem Pfad zum Client. Hierbei hat jeder Server nur Einträge für Clients in seinen Kindern. Die NICK ist eindeutig, weil ein Client nur in einem Teilbaum sein kann. Kommen Clients hinzu (CONNECT) oder verlassen (DISCONNECT) sie das Netz wird die Liste aktualisiert.
 
 \subsection{CHANNELLIST}
