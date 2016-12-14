@@ -20,111 +20,196 @@ Der Server direkt mit dem Client verbundene Server prüft immer, ob source mit d
 
 Die Pakete sehen so aus:
 \begin{lstlisting}
------------------------ - -
-|name|param1|param2|...
------------------------ - -
+----------------------------------------------- - - -
+| msg type | sender hostname | param1 | param2 | ...
+----------------------------------------------- - - -
 \end{lstlisting}
-wobei die Felder jeweils durch Leerzeichen getrennt sind und name der Name des Paketes ist.
+wobei die Felder jeweils durch Leerzeichen getrennt sind und jedes Paket auf einen Zeilenumbruch endet.
+
+\subsection{CONNECT}
+
+\begin{lstlisting}
+------------------
+| CONNECT | host |
+------------------
+\end{lstlisting}
+
+Ein Client muss CONNECT senden um sich beim Netzwerk anzumelden. Empfängt ein Server CONNECT, dann muss er er sich das Interface von dem er CONNECT erhalten hat als Route für den Absender speichern. Jeder Knoten muss CONNECT an seinen Elternkoten weiterleiten, sofern dieser vorhanden ist. Hat der Server keine Elternknoten (ist er also die Wurzel des Baums), dann sollte er STATUS mit \lstinline{connect_success} an \lstinline{host} senden.
+
+\subsection{DISCONNECT}
+
+\begin{lstlisting}
+------------------
+| DISCONNECT | host |
+------------------
+\end{lstlisting}
+
+Ein Client muss DISCONNECT senden, um sich vom Netzwerk abzumelden.
+Jeder Server, der DISCONNECT empfängt, muss \lstinline{host} aus den Kanälen in denen er ist austragen und ihn aus dem Routing für das für ihn gepseicherte Interface ausgetragen.
+Jeder Server, der DISCONNECT empfängt muss falls er nicht der Wurzelknoten ist DISCONNECT an seinen Wurzelknoten weitersenden.
 
 \subsection{NICK}
 
-\begin{enumerate}
-  \item Der Client sendet an den Server NICK = (source: NICK, nick: NICK).
-  \item
-    \begin{enumerate}
-      \item Falls source nicht in der CLIENTLIST dem absendenden Teilbaum zugeordnet ist, sende STATUS = (dest = source, status = 301) an den Client und brich ab.
-      \item Falls nick schon vergeben ist, sende STATUS = (dest = source, status = 302) an den Client und brich ab.
-      \item Falls der Wurzelknoten erreicht wurde, und kein Fehler aufgetreten ist, sende STATUS = (dest = source, status = 300) an den Client und NICKRES = (dest = source, nick = nick).
-    \end{enumerate}
-  \item Wiederhole den vorherigen Punkt. 
-\end{enumerate}
+\begin{lstlisting}
+----------------------
+| NICK | host | nick |
+----------------------
+\end{lstlisting}
+
+Ein Client muss NICK senden, um einen einzigartigen Nicknamen für sich im Netzwerk zu registrieren.
+Der Nickname muss auf den Servern für die Zeit in der der Client mit dem Netzwerk verbunden ist reserviert bleiben.
+Dazu muss jeder Server den Nick speichern und eindeutig mit dem Client verknüpfen.
+Existiert für einen Client bereits ein anderer Nick, dann muss der Nick genau dann geändert werden, falls der geforderte Nickname bisher nicht durch einen anderen Client belegt ist. 
+Jeder Server muss NICK an seinen Elternknoten weitersenden, es sei denn er ist der Wurzelknoten.
+Ist der Nick schon für einen anderen Client gepseichert, wird NICK nicht weitergeleitet und STATUS mit \lstinline{nick_not_unique} an den Client mit host zurückgesendet. 
+Wird die Wurzel erreicht und ist der Nick noch nicht vergeben sendet die Wurzel STATUs mit \lstinline{nick_unique} an \lstinline{host} zurück.
 
 \subsection{JOIN}
 
-\begin{enumerate}
-  \item Der Client sendet JOIN = (source: NICK, channel: CHANNEL.name) an den Server.
-  \item Falls der Client keinen Nick hat (hat noch kein NICK gesendet), sendet der Server STATUS mit Fehlercoe 303 an den Client.
-  \item Falls der Client bereits einen CHANNEL hat, sendet der Server STATUS = (dest = source, status = 404) und bricht ab. 
-  \item
-    \begin{enumerate}
-      \item Der Server prüft in seiner CHANNELLIST, ob er channel kennt.
-      \item Der Server trägt den Absender von JOIN (Client oder ein anderer nächster Hop) in die CHANNELLIST ein.
-      \item Falls der Channel schon bekannt war, sende STATUS = (dest = source, status = 400) und CHANNEL = (dest = source, channel: CHANNEL) an source und breche ab.
-      \item Falls der Channel noch nicht bekannt war, sende JOIN an den Elternknoten weiter.
-      \item Falls kein Elternknoten mehr existiert, sende STATUS = (dest = source, status = 401) an den Client und sende CHANNEL = (dest = source, channel: CHANNEL) an den Client und breche ab.
-    \end{enumerate}
-  \item Alle Server, die CHANNEL erhalten, übernehmen den Eintrag in ihre CHANNELLIST.
-\end{enumerate}
+\begin{lstlisting}
+-------------------------
+| JOIN | host | channel |
+-------------------------
+\end{lstlisting}
+
+Ein Client muss JOIN senden, um einem Kanal beizutreten.
+Ist \lstinline{host} nicht in einem Kanal, dann sendet ein Server STATUS it \lstinline{nick_not_set} an \lstinline{host}.
+Befindet sich \lstinline{host} bereits in einem Kanal, muss der Server STATUS mit \lstinline{already_in_channel} senden.
+Tritt kein solcher Fehler auf, muss der Server JOIN weiter an seinen Elternknoten senden, es sei denn er ist selbst die Wurzel.
+Ist der Server die Wurzel und ist der Kanal noch nicht bekannt, wird der Kanal neu angelegt, \lstinline{host} als Kanaladmin festgelegt, STATUS mit \lstinline{join_new_success} gesendet und CHANNEL \ref{sec:CHANNEL} mit den Kanalinformationen an \lstinline{host} gesendet.
+Ist der Kanal bereits bekannt, muss der Server STATUS mit \lstinline{join_known_success} und CHANNEL für den Kanal senden.
+
+\subsection{CHANNEL}
+
+\begin{lstlisting}
+--------------------------------------
+| CHANNEL | host | name | op | topic |
+--------------------------------------
+\end{lstlisting}
+
+Erhält ein Server CHANNEL von seinem Elternknoten, muss er es an \lstinline{host} weiterleiten, sofern er \lstline{host} kennt.
+Ansonsten muss er CHANNEL ignoreren.
+Der Server muss den Kanal mit \lstinline{name} \lstinline{op} und \lstinline{topic} bei sich lokal anlegen oder den bestehenden Kanl aktualisieren.
+Der Server muss \lstinline{host} in den Kanal einfügen.
 
 \subsection{LEAVE}
 
-\begin{enumerate}
-  \item Der Client sendet LEAVE = (source: NICK, channel: CHANNEL.name) an den Server.
-  \item
-    \begin{enumerate}
-      \item Der Server prüft, ob der Absender in channel ist. Falls nicht sendet er STATUS = (dest = source, STATUS = 402) an den letzen Absender.
-      \item Der Server löscht die NICK des letzen Absenders aus der CHANNELLIST für channel.
-      \item Falls die Liste für channel keine Einträge mehr enthält, wird der Eintrag gelöscht und falls zudem ein Elternknoten existiert, sende ein LEAVE an den Elternknoten. Wiederholen.
-    \end{enumerate}
-  \item Falls kein weiterer Elternknoten mehr existiert, brich ab.
-\end{enumerate}
+\begin{lstlisting}
+--------------------------
+| LEAVE | host | channel |
+--------------------------
+\end{lstlisting}
+
+Ein Client muss LEAVE senden, um einen Kanal zu verlassen.
+Ein Server muss STATUS mit \lstinline{no_such_channel} senden, falls der Kanal mit dem Namen \lstlisting{channel} nicht existiert.
+Ein Server muss STATUS mit \lstinline{not_in_channel} senden, falls der \lstinline{host} nicht in diesem Kanal ist.
+Ist der Client in dem Kanal, dann muss der Server LEAVE an seinen Eleternknoten weiter senden, es sei denn er ist der Wurzelknoten. 
+Ist der Server der Wurzelknoten muss er STATUS mit \lstinline{leave_successful} senden.
+Jeder Server, der LEAVE erhält muss \lstinline{host} aus dem Kanal entfernen.
+Ist \lstinline{host} der Kanaladmin, dann muss der Server zusätzlich den Kanal löschen und DELCHANNEL~\ref{sec:DELCHANNEL} an den Kanal senden.
+Ist der Server der Wurzelknoten, muss er STATUS mit \lstinline{leave_successful} senden.
+
+\subsection{DELCHANNEL}
+
+\begin{lstlisting}
+------------------------
+| DELCHANNEL | channel |
+------------------------
+\end{lstlisting}
+
+Ein Server muss DELCHANNEL senden, falls der Kanal durch den Kanaladmin gelöscht wurde.
+Empfängt ein Server DELCHANNEL, muss er den zugehörigen Kanal löschen.
+Ist der Server der Wurzelknoten, muss er STATUS mit \lstinline{leave_successful} senden.
 
 \subsection{LIST}
 
-\begin{enumerate}
-  \item Der Client sendet LIST = (source: NICK) an den Server.
-  \item Die Server leiten LIST an ihre Wurzel.
-  \item Der Server, welcher alle Kanäle kennt (Wurzel), antwortet mit LISTRES = (dest = source, channels = [CHANNEL,\ldots]).
-\end{enumerate}
+\begin{lstlisting}
+---------------
+| LIST | host |
+---------------
+\end{lstlisting}
+
+Ein Client muss LIST senden, um eine vollständige Liste der im Netzwerk erhaltenen Kanäle zu erhalten.
+Erhält ein Server LIST und ist er nicht der Wurzelknoten, dann muss er LIST an seinen Elternknoten weitersenden.
+Ist ein Server der Wurzelknoten, muss er LISTRES mit der vollständigen Liste der Kanäle an \lstinline{host} senden.
+
+\subsection{LISTRES}
+
+\begin{lstlisting}
+---------------------------------------- - -
+| LISTRES | host | channel1 | channel2 | ...
+---------------------------------------- - -
+\end{lstlisting}
+
+Ein Server muss LISTRES senden, falls er ein Wurzelknoten ist und LIST von \lstinline{host} erhalten hat.
+\lstinline{channel1} bis \lstline{channelx} muss eine durch Leerzeichen getrennte Liste der dem Server bekannten Kanäle sein.
+Ein Server der LISTRES empfängt muss LISTRES an \lstinline{host} weitersenden.
 
 \subsection{GETTOPIC}
 
-\begin{enumerate}
-  \item Der Client sendet GETTOPIC = (source: NICK, channel: CHANNEL.name) an den Server.
-  \item Der erste Server, der den channel kennt, antwortet mit TOPIC = (dest = source, channelname: CHANNEL.name, topic: CHANNEL.topic).
-  \item Falls kein Server channel kennt, antwortet die Wurzel mit STATUS = (dest = source, status = 403).
-\end{enumerate}
+\begin{lstlisting}
+-----------------------------
+| GETTOPIC | host | channel |
+-----------------------------
+\end{lstlisting}
+
+Ein Client muss GETTOPIC senden um das Gesprächsthema für seinen aktuellen Kanal zu erhalten.
+Empfängt ein Server GETTOPIC und kennt er den Kanal nicht, muss er mit STATUS mit \lstinline{not_in_channel} antworten.
+Empfängt ein Server GETTOPIC und kennt er den Kanal, dann antwortet er dem \lstinline{host} mit TOPIC~\ref{sec:TOPIC}, welches das aktuelle Gesprächsthema des Kanals enthält.
 
 \subsection{SETTOPIC}
 
-\begin{enumerate}
-  \item Der Client sendet SETTOPIC = (source: NICK, channel: CHANNEL.name, topic: CHANNEL.topic) an seinen Server.
-  \item
-    \begin{enumerate}
-      \item Ist CHANNEL.op nicht gleich source, dann sendet der Server STATUS = (dest = source, status = 502) an den Client.
-      \item Ansonsten übernimmt der Server topic in seine CHANNELLIST und sendet SETTOPIC weiter an den Kanal (siehe Routing)
-    \end{enumerate}
-\end{enumerate}
+\begin{lstlisting}
+-------------------------------------
+| SETTOPIC | host | channel | topic |
+-------------------------------------
+\end{lstlisting}
+
+Ein Client muss SETTOPIC senden um das Kanalthema zu setzen.
+Empfängt ein Server SETTOPIC von seinem Elternknoten und kennt den Kanal, dann muss er \lstinline{topic} als das neue Kanalthema speichern und SETTOPIC an den Kanal weitersenden.
+Empfängt ein Server SETTOPIC von einem seiner Kinderknoten und kennt er den Kanal, dann muss er das neue Kanalthema übernehmen und SETTOPIC an den Kanal weitersenden.
+Ist \lstinline{host} nicht der Kanaladmin, muss der Server, falls SETTOPIC von einem Kinderknoten empfangen wurde, STATUS mit \lstinline{nick_not_authorized} an \lstinline{host} senden.
 
 \subsection{MSG}
 
-\begin{enumerate}
-  \item Der Client sendet MSG = (source: NICK, channel: CHANNEL.name, msg: STRING) an seinen Server.
-  \item Kennt er den Channel nicht, sendet der Server STATUS = (source, status = 403).
-  \item Ist der Client nicht in diesem channel angemeldet, sendet der Server STATUS = (dest = source, status = 402).
-  \item Der Server sendet MSG an channel (siehe Routing).
-  \item Der Server sendet bei Erfolg (sofort) STATUS = (source, status = 600) an den Client.
-\end{enumerate}
+\begin{lstlisting}
+---------------------------------------------
+| MSG | sender_host | sender_nick | channel |
+---------------------------------------------
+\end{lstlisting}
+
+Ein Client muss MSG senden, wenn er eine Kanalnachricht senden möchte.
+Kennt ein Server den Kanal nicht und wurde die Nachricht über einen Kinderknoten gesendet, muss der Server STATUS mit \lstinline{no_such_channel} senden.
+Ist der Kanal bekannt, aber \lstinline{sender_host} nicht im Kanal, dann muss der STATUS mit \lstinline{not_inchannel} senden.
+Ansonsten muss ein Server, der MSG empfängt, MSG an den \lstinline{channel} weitersenden.
 
 \subsection{PRIVMSG}
 
-\begin{enumerate}
-  \item Der Client sendet PRIVMSG = (source: NICK, channel: CHANNEL.name, dest: NICK, msg: STRING) an dest (siehe Routing)
-  \item Kennt ein Server channel nicht, antwortet er an source mit STATUS = (source, status = 403).
-  \item Kennt ein Server channel und erhält der die Nachricht von seinem Elternknoten und kennt kennt dest nicht, sendet er STATUS = (source, status = 601) an source.
-  \item Kennt ein Server channel und hat er keinen Elternknoten, kennt aber dest nicht, so antwortet er mit STATUS = (source, status = 601)
-  \item Kennt ein Server sowohl channel, als auch dest, aber wiedersprechen sich die NICK zu beiden, sendet der Server STATUS = (source, status = 603).
-  \item Wurde die Nachricht erfolgreich zugestellt quittiert der Empfänger (Client) die Nachricht mit STATUS = (source, status = 604)
-\end{enumerate}
+\begin{lstlisting}
+---------------------------------------------------------
+| PRIVMSG | sender_host | sender_nick | channel | dest_nick |
+---------------------------------------------------------
+\end{lstlisting}
+
+Ein Client muss PRIVMSG senden, wenn er eine Kanalnachricht senden möchte.
+Kennt ein Server den Kanal nicht und wurde die Nachricht über einen Kinderknoten gesendet, muss der Server STATUS mit \lstinline{no_such_channel} senden.
+Ist der Kanal bekannt, aber \lstinline{sender_host} nicht im Kanal, dann muss der STATUS mit \lstinline{not_inchannel} senden.
+Ist der Kanal bekannt und der \lstinline{send_host} im Kanal, aber \lstinline{dest_nick} nicht im Kanal, dann sende STATUS mit \lstinline{no_such_client_in_channel}.
+Ansonsten muss ein Server, der PRIVMSG empfängt, PRIVMSG an den \lstinline{dest_nick} weitersenden.
+Ist \lstinline{dest_nick} nicht bekannt, dann muss der Server PRIVMSG an seinen Elternknoten weitersenden.
 
 \subsection{QUIT}
 
-\begin{enumerate}
-  \item Der Client sendet QUIT an seinen Server. 
-  \item Dieser löscht den Client aus allen Kanälen 
-  \item und sendet QUIT an seinen Elternknoten weiter.
-\end{enumerate}
+\begin{lstlisting}
+----------------------
+| QUIT | sender_host |
+----------------------
+\end{lstlisting}
 
+Ein Client muss QUIT senden, falls er das Netzwerk verlassen möchte.
+Ein Server muss QUIT an seinen Elternknoten weiterleiten, es sei denn er ist selbst der Wurzelknoten.
+Jeder Server muss \lstinline{sender_host} aus allen Kanälen löschen, in denen dieser ist.
+Alle Kanäle für die \lstinline{sender_host} ein Kanaladmin ist müssen gelöscht werden und für diese DELCHANNEL versendet werden.
 
 \section{Datenstrukturen}
 
@@ -201,25 +286,26 @@ Siehe Protokoll.
 \subsection{Fehler-Codes}
 
 \begin{tabular}{rl}
-  100 & CONNECT erfolgreich \\
-  101 & Fehler bei CONNECT \\
-  200 & DISCONNECT erfolgreich \\
-  201 & Fehler bei DISCONNECT \\
-  300 & NICK ist einzigartig \\
-  301 & Nicht authotisierte NICK-Änderung \\
-  302 & NICK ist nicht einzigartig \\
-  303 & NICK ist nicht gesetzt worden \\
-  400 & Bekannter Channel, JOIN erfolgreich \\
-  401 & Neuer Channel erstellt, JOIN erfolgreich \\
-  402 & Nicht in Channel \\
-  403 & Kein solcher Channel existiert \\
-  404 & Bereits in anderem CHANNEL beigetreten \\
-  405 & Kanal erfolgreich verlassen \\
-  502 & Absender ist nicht Channel-OP \\
-  600 & Kanalnachricht erfolgreich zugestellt \\
-  601 & Kein solcher Client im Channel \\
-  603 & Client befindet sich woanders, aber nicht in dem Kanal \\
-  604 & Private Nachricht erfolgreich zugestellt \\
+
+  \lstinline{connect_success}           & 100 & CONNECT erfolgreich \\
+  \lstinline{connect_error}             & 101 & Fehler bei CONNECT \\
+  \lstinline{disconnect_success}        & 200 & DISCONNECT erfolgreich \\
+  \lstinline{disconnect_error}          & 201 & Fehler bei DISCONNECT \\
+  \lstinline{nick_unique}               & 300 & NICK ist einzigartig \\
+  \lstinline{nick_not_authorized}       & 301 & Nicht authotisierte NICK-Änderung \\
+  \lstinline{nick_not_unique}           & 302 & NICK ist nicht einzigartig \\
+  \lstinline{nick_not_set}              & 303 & NICK ist nicht gesetzt worden \\
+  \lstinline{join_known_success}        & 400 & Bekannter Channel, JOIN erfolgreich \\
+  \lstinline{join_new_success}          & 401 & Neuer Channel erstellt, JOIN erfolgreich \\
+  \lstinline{not_in_channel}            & 402 & Nicht in Channel \\
+  \lstinline{no_such_channel}           & 403 & Kein solcher Channel existiert \\
+  \lstinline{already_in_channel}        & 404 & Bereits in anderem CHANNEL beigetreten \\
+  \lstinline{leave_successful}          & 405 & Kanal erfolgreich verlassen \\
+  \lstinline{client_not_channel_op}     & 502 & Absender ist nicht Channel-OP \\
+  \lstinline{msg_delivered}             & 600 & Kanalnachricht erfolgreich zugestellt \\
+  \lstinline{no_such_client}            & 601 & Kein solcher Client im Channel \\
+  \lstinline{no_such_client_in_channel} & 603 & Client befindet sich woanders, aber nicht in dem Kanal \\
+  \lstinline{privmsg_delivered}         & 604 & Private Nachricht erfolgreich zugestellt \\
 \end{tabular}
 
 \subsection{Gleichzeitigkeit}
