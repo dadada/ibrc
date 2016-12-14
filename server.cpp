@@ -478,11 +478,13 @@ void server::do_privmsg(std::istringstream &smsg, int source)
 			if (src != nullptr) {
 				if (src->route == source) { // validate source
 					if (dest != nullptr) {
-						if (chan->in_channel(dest)) {
+						if (chan->in_channel(src)) {
+							if (chan->in_channel(dest)) {
 
-							conman->add_message(dest->route, smsg.str());
-						} else {
-							send_status(src, no_such_client_in_channel);
+								conman->add_message(dest->route, smsg.str());
+							} else {
+								send_status(src, no_such_client_in_channel);
+							}
 						}
 					} else {
 						if (!root) {
@@ -620,6 +622,17 @@ void server::do_quit(std::istringstream &smsg, int source)
 
 	if (smsg >> host) {
 		peer *src = peer::get_by_host(host);
+
+		for (auto chan : channel::channel_list()) {
+			if (chan->in_channel(src)) {
+				if (chan->op == src->host) {
+					send_delete_channel(chan, src->route);
+					delete chan;
+				} else {
+					chan->leave(src);
+				}
+			}
+		}
 
 		if (src != nullptr && src->route == source) {
 
