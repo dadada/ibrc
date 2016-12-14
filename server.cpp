@@ -468,7 +468,7 @@ void server::do_privmsg(std::istringstream &smsg, int source)
 	if (smsg >> host >> sender_nick >> chan_name >> dest_nick) {
 		channel *chan = channel::get(chan_name);
 		peer *src = peer::get_by_host(host);
-		peer *dest = peer::get_by_host(dest_nick);
+		peer *dest = peer::get(dest_nick);
 
 		if (chan == nullptr) {
 			if (src != nullptr) {
