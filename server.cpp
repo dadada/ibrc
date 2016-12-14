@@ -315,19 +315,21 @@ void server::do_join(std::istringstream &smsg, int source)
 				send_status(known_peer, nick_not_set);
 			} else if (channel::is_in_channel(known_peer)) {
 				send_status(known_peer, already_in_channel);
-			}
-			else if (known_channel != nullptr) { // knows the channel
-				known_channel->join(known_peer);
-				if (!root) {
-					conman->add_message(parent, smsg.str());
-				}
-			} else {
-				if (root) {
-					known_channel = new channel(chan, known_peer);
-					send_channel(known_peer, known_channel);
+			} else if (root) {
+				if (known_channel != nullptr) {
+					known_channel->join(known_peer);
+					send_status(known_peer, join_known_success);
 				} else {
-					conman->add_message(parent, smsg.str());
+					known_channel = new channel(chan, known_peer); // implicit join
+					send_status(known_peer, join_new_success);
 				}
+
+				send_channel(known_peer, known_channel);
+			} else {
+				if (known_channel != nullptr) {
+					known_channel->join(known_peer);
+				}
+				conman->add_message(parent, smsg.str());
 			}
 		}
 	}
