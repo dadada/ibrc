@@ -465,7 +465,9 @@ void client::process_message(std::string& msg)
 						std::cout << par2 << ": " << par4.substr(1, par4.size()) << std::endl;
 					}
 					break;
-
+				case DELCHANNEL:
+					current_channel = "";
+					break;
 				default:
 					break;
 			}
