@@ -468,24 +468,34 @@ void server::do_privmsg(std::istringstream &smsg, int source)
 	if (smsg >> host >> sender >> sender_nick >> chan_name >> dest_nick) {
 		channel *chan = channel::get(chan_name);
 		peer *src = peer::get_by_host(sender);
-		peer *dest = peer::get(dest_nick);
+		peer *dest = peer::get_by_host(dest_nick);
 
-		if (source == parent) {
-			if (chan != nullptr && dest != nullptr) {
-				conman->add_message(dest->route, smsg.str());
-			}
-		} else {
-			if (chan != nullptr && src != nullptr) {
-				if (chan->in_channel(src)) {
-					send_to_channel(chan, smsg.str(), source);
-					if (root) {
-						send_status(src, privmsg_delivered);
-					}
-				} else {
-					send_status(src, not_in_channel);
-				}
-			} else if (src != nullptr) {
+		if (chan == nullptr) {
+			if (src != nullptr) {
 				send_status(src, no_such_channel);
+			}
+		} else { // knows the channel
+			if (src != nullptr) {
+				if (src->route == source) { // validate source
+					if (dest != nullptr) {
+						if (chan->in_channel(dest)) {
+
+							conman->add_message(dest->route, smsg.str());
+						} else {
+							send_status(src, no_such_client_in_channel);
+						}
+					} else {
+						if (!root) {
+							conman->add_message(parent, smsg.str());
+						}
+					}
+				}
+			} else if (source == parent) {
+			       	if (dest != nullptr) {
+				       	if (chan->in_channel(dest)) {
+						conman->add_message(dest->route, smsg.str());
+					}
+				}
 			}
 		}
 	}
