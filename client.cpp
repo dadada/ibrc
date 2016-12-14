@@ -462,7 +462,7 @@ void client::process_message(std::string& msg)
 				case MSG:
 					if (msg_stream >> par2 >> par3 && std::getline(msg_stream, par4, '\n') 
 							&& par3 == current_channel) {
-						std::cout << par1 << ": " << par4.substr(1, par4.size()) << std::endl;
+						std::cout << par2 << ": " << par4.substr(1, par4.size()) << std::endl;
 					}
 					break;
 
