@@ -490,7 +490,7 @@ void client::process_message(std::string& msg)
 
 int client::send_list()
 {
-	if (nick != "" && send_message("LIST", "") != 0) {
+	if (send_message("LIST", "") != 0) {
 		return -1;
 	}
 	return 0;
