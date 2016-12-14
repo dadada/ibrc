@@ -60,8 +60,10 @@ void channel::join(peer *member)
 	routes.insert(member->route);
 }
 
-void channel::leave(const peer *p)
+void channel::leave(peer *p)
 {
+	members.erase(p);
+
 	bool route_done = true;
 
 	for (auto m : members) {

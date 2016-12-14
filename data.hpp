@@ -69,7 +69,7 @@ class channel
 
 		void join(peer *p);
 
-		void leave(const peer *p);
+		void leave(peer *p);
 
 		bool in_channel(peer *p);
 
