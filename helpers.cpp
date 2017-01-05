@@ -10,10 +10,17 @@
 #include <netdb.h>
 #include <cstring>
 
-#define BUFLEN 2056 // max size of message
-#define EPOLLFLAGS EPOLLIN | EPOLLET | EPOLLRDHUP
-
 int set_socket_non_blocking(int sockfd)
+{
+	return set_socket_opt(sockfd, O_NONBLOCK);
+}
+
+int set_socket_blocking(int sockfd)
+{
+	return unset_socket_opt(sockfd, O_NONBLOCK);
+}
+
+int set_socket_opt(int sockfd, int opt)
 {
 	int flags, s;
 
@@ -23,7 +30,27 @@ int set_socket_non_blocking(int sockfd)
 		return -1;
 	}
 
-	flags |= O_NONBLOCK;
+	flags |= opt;
+	s = fcntl (sockfd, F_SETFL, flags);
+	if (s == -1) {
+		perror ("fcntl");
+		return -1;
+	}
+
+	return 0;
+}
+
+int unset_socket_opt(int sockfd, int opt)
+{
+	int flags, s;
+
+	flags = fcntl(sockfd, F_GETFL, 0);
+	if (flags == -1) {
+		perror ("fcntl");
+		return -1;
+	}
+
+	flags &= ~opt;
 	s = fcntl (sockfd, F_SETFL, flags);
 	if (s == -1) {
 		perror ("fcntl");
@@ -113,19 +140,19 @@ int connection_manager::wait_events()
 {
 	next_event_pos = 0;
 
-	int count = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+	count_events = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 
-	if (count == -1) {
+	if (count_events == -1) {
 		perror("epoll_wait");
 		return -1;
 	}
 
-	return count;
+	return count_events;
 }
 
 bool connection_manager::next_event(struct epoll_event &ev)
 {
-	if (next_event_pos < MAX_EVENTS) {
+	if (next_event_pos < count_events && next_event_pos < MAX_EVENTS) {
 		ev = events[next_event_pos];
 		next_event_pos++;
 		if (socks.find(ev.data.fd) == socks.end()) {
@@ -177,26 +204,34 @@ int connection_manager::add_accepting(std::string port)
 		return -1;
 	}
 
-	if (set_socket_non_blocking(listen_s) != 0) {
-		remove_socket(listen_s);
+	if (add_socket(listen_s, EPOLLFLAGS) < 0) {
 		return -1;
 	}
 
+	return listen_s;
+
+}
+
+int connection_manager::add_socket(int sockfd, int flags)
+{
+	if (set_socket_non_blocking(sockfd) != 0) {
+		return -1;
+	}
+	
 	struct epoll_event ev;
 
-	ev.events = EPOLLFLAGS;
-	ev.data.fd = listen_s;
+	ev.events = flags;
+	ev.data.fd = sockfd;
 
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listen_s, &ev) != 0) {
-		remove_socket(listen_s);
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) != 0) {
+		remove_socket(sockfd);
 		perror("epoll_ctl: add sockfd failed.");
 		return -1;
 	}
 
-	socks.insert(listen_s);
+	socks.insert(sockfd);
 
-	return listen_s;
-
+	return sockfd;
 }
 
 int connection_manager::accept_client(int sock)
@@ -216,18 +251,9 @@ int connection_manager::accept_client(int sock)
 		return -1;
 	}
 
-	struct epoll_event ev;
-
-	ev.events = EPOLLFLAGS | EPOLLOUT;
-	ev.data.fd = conn_s;
-
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, conn_s, &ev) == -1) {
-		perror("epoll_ctl: failed to add socket");
-		remove_socket(conn_s);
+	if (add_socket(conn_s, EPOLLFLAGS | EPOLLOUT) < 0) {
 		return -1;
 	}
-
-	socks.insert(conn_s);
 
 	return conn_s;
 }

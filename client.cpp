@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
 
 	the_client = new client();
 
-	if (the_client->connect_client(host, port) == 0) {
+	if (the_client->connect_client(host, port)) {
 		if (!(the_client->run())) {
 			std::cerr << "oopsi" << std::endl;
 		}
@@ -58,8 +58,16 @@ void client::cleanup(int signum)
 client::client()
 {
 	quit_bit = false;
-	sockfd = -1; // stdin
+	sockfd = -1; // not 0, that would be stdout
 	current_channel = ""; // empty channel is no channel
+
+	char hostn[1024];
+	hostn[1023] = '\0';
+	gethostname(hostn, 1023);
+	hostname = std::string(hostn);
+
+	conman = new connection_manager();
+	conman->add_socket(STDIN_FILENO, EPOLLFLAGS);
 }
 
 const char* client_exception::what() const throw()
@@ -67,99 +75,16 @@ const char* client_exception::what() const throw()
 	return "client: failed to create a client";
 }
 
-int client::connect_client(std::string host, std::string server_port)
+bool client::connect_client(std::string host, std::string server_port)
 {
-	struct addrinfo *ainfo;
-	struct addrinfo hints;
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC; // AF_INET or AF_INET6 to force version
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = 0;
-
-	int status;
-	if ((status = getaddrinfo(host.c_str(), server_port.c_str(), &hints, &ainfo)) != 0) {
-		std::cerr << "getaddrinfo: " << gai_strerror(status) << std::endl;
-		return -1;
-	}
-
-	sockfd = socket(ainfo->ai_family, ainfo->ai_socktype, ainfo->ai_protocol);
-
-	if (sockfd == -1) {
-		perror("socket");
-		return -1;
-	}
-
-	int yes = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
-		perror("setsockopt");
-		return -1;
-	}
-	
-	if (connect(sockfd, ainfo->ai_addr, ainfo->ai_addrlen) == -1) {
-		perror("connect");
-		return -1;
-	}
-
-	char hostn[1024];
-	hostn[1023] = '\0';
-	gethostname(hostn, 1023);
-	hostname = std::string(hostn);
-
-	struct sockaddr_storage addr;
-	socklen_t len = sizeof (addr);
-
-	if (getsockname(sockfd, (struct sockaddr*)&addr, &len) != 0) {
-		perror("getsockname");
-		return -1;
-	}
-	
-	if (addr.ss_family == AF_INET) {
-		struct sockaddr_in *s = (struct sockaddr_in *)&addr;
-		port = ntohs(s->sin_port);
-	} else {
-		struct sockaddr_in6 *s = (struct sockaddr_in6 *)&addr;
-		port = ntohs(s->sin6_port);
-	}
-
-	struct epoll_event ev;
-
-	epollfd = epoll_create1(0);
-
-	if (epollfd == -1 || (set_socket_non_blocking(sockfd) != 0)
-	  || (set_socket_non_blocking(STDIN_FILENO) != 0)) {
-		return -1;
-	}
-
-	if (epollfd == -1) {
-		perror("epoll_create1");
-		return -1;
-	}
-
-	ev.events = EPOLLIN;
-	ev.data.fd = STDIN_FILENO;
-
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, STDIN_FILENO, &ev) == -1) {
-		perror("epoll_ctl: add user input fd failed.");
-		return -1;
-	}
-
-	ev.events = EPOLLIN | EPOLLET;
-	ev.data.fd = sockfd;
-
-	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) != 0) {
-		perror("epoll_ctr: add sockfd failed.");
-		return -1;
-	}
-
-	send_message("CONNECT", "");
-	
-	return 0;
+	sockfd = conman->create_connection(host, server_port);
+	return sockfd > 0 && send_message("CONNECT", "");
 }
 
-int client::send_message(std::string msg_name, std::string msg_payload)
+bool client::send_message(std::string msg_name, std::string msg_payload)
 {
 	if (!connected()) {
-		return -1;
+		return false;
 	}
 
 	std::stringstream msg;
@@ -167,114 +92,82 @@ int client::send_message(std::string msg_name, std::string msg_payload)
 	msg << msg_name << " " << hostname << " " << msg_payload << std::endl;
 
 	const std::string msg_str = msg.str();
-	net_output.push(msg_str);
-
-	struct epoll_event ev;
-
-	ev.events = EPOLLIN | EPOLLET | EPOLLOUT;
-	ev.data.fd = sockfd;
-
-	if (epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &ev) != 0) {
-		perror("epoll_ctl: mod sockfd failed.");
-		return -1;
-	}
-
-	return 0;
+	return conman->add_message(sockfd, msg_str);
 }
 
-int client::set_nick(std::string new_nick)
+bool client::set_nick(std::string new_nick)
 {
 	if (nick == "") {
 		nick = new_nick;
 	}
-	if (send_message("NICK", new_nick) != 0) {
-		return -1;
+	if (!send_message("NICK", new_nick)) {
+		return false;
 	}
 	nick = new_nick;
 
-	return 0;
+	return true;
 }
 
-int client::join_channel(std::string chan_name)
+bool client::join_channel(std::string chan_name)
 {
-	send_message("JOIN", chan_name);
-	return 0;
+	return send_message("JOIN", chan_name);
 }
 
-int client::leave_channel(std::string chan_name)
+bool client::leave_channel(std::string chan_name)
 {
-	if (send_message("LEAVE", chan_name) != 0) {
-		return -1;
-	}
-	return 0;
+	return send_message("LEAVE", chan_name);
 }
 
 bool client::connected()
 {
-	return sockfd != 0;
+	return sockfd > 0;
 }
 
-int client::get_topic(std::string chan_name)
+bool client::get_topic(std::string chan_name)
 {
-	if (send_message("GETTOPIC", chan_name) != 0) {
-		return -1;
-	}
-
-	return 0;
+	return send_message("GETTOPIC", chan_name);
 }
 
-int client::set_topic(std::string chan_name, std::string new_channel_topic)
+bool client::set_topic(std::string chan_name, std::string new_channel_topic)
 {
-	if (send_message("SETTOPIC", chan_name + " " + new_channel_topic) != 0) {
-		return -1;
-	}
-
-	return 0;
+	return send_message("SETTOPIC", chan_name + " " + new_channel_topic);
 }
 
-int client::send_channel_message(std::string channel_name, std::string message)
+bool client::send_channel_message(std::string channel_name, std::string message)
 {
-	if (send_message("MSG", nick + " " + channel_name + " " + message) != 0) {
-		return -1;
-	}
-
-	return 0;
+	return send_message("MSG", nick + " " + channel_name + " " + message);
 }
 
-int client::send_private_message(std::string recipient, std::string channel, std::string message)
+bool client::send_private_message(std::string recipient, std::string channel, std::string message)
 {
-	if (send_message("PRIVMSG", nick + " " + channel + " " + recipient + " " + message) != 0) {
-		return -1;
-	}
-
-	return 0;
+	return send_message("PRIVMSG", nick + " " + channel + " " + recipient + " " + message);
 }
 
-int client::quit()
+void client::quit()
 {
 	quit_bit = true;
-	send_message("QUIT", "");
-	return 0;
+	set_socket_blocking(sockfd);
+	std::ostringstream msg;
+	msg << "QUIT" << " " << hostname << std::endl;
+	send(sockfd, msg.str().c_str(), msg.str().size(), 0);
 }
 
-int client::run()
+bool client::run()
 {
-	struct epoll_event events[MAX_EVENTS];
-
-	while (true) {
-		// no timeout
-		int count = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+	while (!quit_bit) {
+		int count = conman->wait_events();
 
 		if (count == -1) {
 			perror("epoll_wait");
-			return -1;
+			return false;
 		}
 
-		for (int n = 0; n < count; ++n) {
-			struct epoll_event ev = events[n];
-			if (ev.events & EPOLLERR || ev.events & EPOLLHUP) {
-				close(ev.data.fd);
-				quit_bit = true;
+		struct epoll_event ev;
+
+		while (conman->next_event(ev)) {
+			if (ev.events & EPOLLRDHUP || ev.events & EPOLLERR || ev.events & EPOLLHUP) {
+				conman->remove_socket(ev.data.fd);
+				return false;
 			} else if (ev.data.fd == STDIN_FILENO) {
 				std::string cmd;
 				std::getline(std::cin, cmd);
@@ -284,47 +177,25 @@ int client::run()
 			} else if (ev.data.fd == sockfd) {
 
 				if (ev.events & EPOLLIN) {
-					if (sockfd_in(ev.data.fd, net_input) == 0) {
-						quit();
-					}
-					consume_net_input();
-				}
-				if (ev.events & EPOLLOUT) {
-					int status = sockfd_out(ev.data.fd, net_output);
-					if (status == 0) {
-						// disable waiting for socket if queue is empty
-						ev.events = EPOLLIN | EPOLLET;
-						if (epoll_ctl(epollfd, EPOLL_CTL_MOD, ev.data.fd, &ev) != 0) {
-							perror("epoll_ctr: mod sockfd failed.");
-							return -1;
+					if (conman->receive_messages(ev.data.fd)) {
+						std::string msg;
+						while (conman->fetch_message(ev.data.fd, msg)) {
+							process_message(msg);
 						}
-						if (quit_bit) {
-							return true;
-						}
+					} else {
+						conman->remove_socket(ev.data.fd);
+						std::cerr << "connection closed" << std::endl;
 					}
-				}
-			}
-		}
-	}
-	return 0;
-}
 
-void client::consume_net_input()
-{
-	std::stringstream ss;
-	while (!net_input.empty()) {
-		std::string &next = net_input.front();
-		if (next.size() > 0) {
-			if (next.back() == '\n') {
-				process_message(next);
-				net_input.pop();
-			} else {
-				break; // end reached
+				} else if (ev.events & EPOLLOUT) {
+					if (!conman->send_messages(ev.data.fd)) {
+						std::cerr << "failed to send messages from queue" << std::endl;
+					}
+				}
 			}
-		} else { // skip empty if exists
-			net_input.pop();
 		}
 	}
+	return true;
 }
 
 bool client::process_command(std::string &command)
@@ -341,14 +212,14 @@ bool client::process_command(std::string &command)
 		switch (mtype) {
 			case NICK:
 				if (cmd_stream >> par1) {
-					return (set_nick(par1) == 0);
+					return set_nick(par1);
 				} else {
 					std::cerr << "usage: /NICK <new nick>" << std::endl;
 				}
 				break;
 			case JOIN:
 				if (cmd_stream >> par1) {
-					return (join_channel(par1) == 0);
+					return join_channel(par1);
 				} else {
 					std::cerr << "usage: /JOIN <channel>" << std::endl;
 				}
@@ -366,7 +237,7 @@ bool client::process_command(std::string &command)
 					std::cerr << "must be joined to channel";
 					return false;
 				} else {
-					return (get_topic(current_channel) == 0);
+					return get_topic(current_channel);
 				}
 				break;
 			case SETTOPIC:
@@ -374,30 +245,31 @@ bool client::process_command(std::string &command)
 					std::cerr << "must be joined to channel";
 					return false;
 				} else if (getline(cmd_stream, par1, '\n')) {
-					return (set_topic(current_channel, par1.substr(1,par1.size())) == 0);
+					return set_topic(current_channel, par1.substr(1,par1.size()));
 				} else {
 					std::cerr << "usage: /SETTOPIC <topic>" << std::endl;
 				}
 				break;
 			case MSG:
 				if (std::getline(cmd_stream, par1, '\n')) {
-					return (send_channel_message(current_channel, par1.substr(1,par1.size())) == 0);
+					return send_channel_message(current_channel, par1.substr(1,par1.size()));
 				} else {
 					std::cerr << "usage: [/MSG] <message>" << std::endl;
 				}
 				break;
 			case PRIVMSG:
 				if (cmd_stream >> par1 && std::getline(cmd_stream, par2, '\n')) {
-					return (send_private_message(par1, current_channel, par2.substr(1,par2.size())) == 0);
+					return send_private_message(par1, current_channel, par2.substr(1, par2.size()));
 				} else {
 					std::cerr << "usage: /PRIVMSG <recipient> <message>" << std::endl;
 				}
 				break;
 			case LIST:
-				return (send_list() == 0);
+				return send_list();
 				break;
 			case QUIT:
-				return (quit() == 0);
+				quit();
+				return true;
 				break;
 			case HELP:
 				std::cerr << "commands: ";
@@ -414,7 +286,7 @@ bool client::process_command(std::string &command)
 	} else {
 		if (current_channel != "") {
 			std::getline(cmd_stream, par1, '\n');
-			return (send_channel_message(current_channel, cmd + par1) == 0);
+			return send_channel_message(current_channel, cmd + par1);
 		}
 	}
 
@@ -488,10 +360,7 @@ void client::process_message(std::string& msg)
 	}
 }
 
-int client::send_list()
+bool client::send_list()
 {
-	if (send_message("LIST", "") != 0) {
-		return -1;
-	}
-	return 0;
+	return send_message("LIST", "");
 }

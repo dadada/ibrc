@@ -8,6 +8,7 @@
 #include <sstream>
 #include <unistd.h>
 #include "data.hpp"
+#include "helpers.hpp"
 
 #define BUFLEN 2056
 
@@ -22,14 +23,11 @@ class client
 		/* The client tcp socket, connected to one server max.*/
 		int sockfd;
 
-		/* epoll fd */
-		int epollfd;
+		/* manages network */
+		connection_manager *conman;
 
 		/* hostname */
 		std::string hostname;
-
-		/* port of the tcp socket in use, in host byte order */
-		int port;
 
 		/* globally unique nickname */
 		std::string nick;
@@ -43,50 +41,47 @@ class client
 		/* send queue */
 		std::queue<std::string> net_output;
 
-		/* consume net_input */
-		void consume_net_input();
-
-		/* encodes and sends a message */
-		int send_message(std::string msg_name, std::string msg_payload);
-
 	public:
 		client();
 
 		/* run the client */
-		int run();
+		bool run();
 
 		/* connects to a server */
-		int connect_client(std::string host, std::string port);
+		bool connect_client(std::string host, std::string port);
+
+		/* sends a message */
+		bool send_message(std::string msg_name, std::string msg_payload);
 
 		/* disconnects from the current server (socket)*/
-		int disconnect();
+		bool disconnect();
 
 		/* sets or changes the nick */
-		int set_nick(std::string new_nick);
+		bool set_nick(std::string new_nick);
 
 		/* joins a channel, fails if already joined a channel */
-		int join_channel(std::string chan_name);
+		bool join_channel(std::string chan_name);
 
 		/* leaves a channel */
-		int leave_channel(std::string chan_name);
+		bool leave_channel(std::string chan_name);
 
 		/* gets the topic for a channel */
-		int get_topic(std::string chan_name);
+		bool get_topic(std::string chan_name);
 
 		/* sets the current topic for a channel, must be op */
-		int set_topic(std::string chan_name, std::string new_channel_topic);
+		bool set_topic(std::string chan_name, std::string new_channel_topic);
 
 		/* sends a message to the channel */
-		int send_channel_message(std::string channel_name, std::string message);
+		bool send_channel_message(std::string channel_name, std::string message);
 
 		/* sends a private message to a client (nick) in a channel */
-		int send_private_message(std::string recipient, std::string channel, std::string message);
+		bool send_private_message(std::string recipient, std::string channel, std::string message);
 
 		/* sends a request for a list of all channels */
-		int send_list();
+		bool send_list();
 
 		/* leaves the current channel, disconnects from the newtwork, stops the client */
-		int quit();
+		void quit();
 
 		/* checks if client is connected */
 		bool connected();

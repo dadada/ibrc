@@ -9,6 +9,14 @@
 #include <unordered_map>
 
 #define MAX_EVENTS 30
+#define BUFLEN 2056 // max size of message
+#define EPOLLFLAGS EPOLLIN | EPOLLET | EPOLLRDHUP
+
+int set_socket_opt(int sockfd, int opt);
+
+int unset_socket_opt(int sockfd, int opt);
+
+int set_socket_blocking(int sockfd);
 
 int set_socket_non_blocking(int sockfd);
 
@@ -34,6 +42,8 @@ class connection_manager
 		int epollfd;
 
 		struct epoll_event* events;
+
+		int count_events;
 
 		int current_event;
 
@@ -84,5 +94,8 @@ class connection_manager
 
 		/* sends as many messages as possible */
 		bool send_messages(int sock);
+
+		/* adds a socket to the poll set */
+		int add_socket(int sockfd, int flags);
 };
 #endif /* HELPERS_HPP */
